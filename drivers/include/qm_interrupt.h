@@ -141,12 +141,10 @@ void _qm_irq_setup(uint32_t irq, uint16_t register_offset);
 				     "1:\n\t"                                  \
 				     "         pushal\n\t"                     \
 				     "         call %P2\n\t"                   \
-				     "         movl $0x0, (%P3)\n\t"           \
 				     "         popal\n\t"                      \
 				     "         iret\n\t"                       \
 				     "2:\n\t" ::"g"(vector),                   \
-				     "i"(_qm_register_isr), "i"(isr),          \
-				     "i"(&(QM_INT_CONTROLLER->eoi.reg))        \
+				     "i"(_qm_register_isr), "i"(isr)           \
 				     : "%eax", "%ecx", "%edx");                \
 	} while (0)
 #else
@@ -162,12 +160,10 @@ void _qm_irq_setup(uint32_t irq, uint16_t register_offset);
 				     "1:\n\t"                                  \
 				     "         pushal\n\t"                     \
 				     "         call %P2\n\t"                   \
-				     "         movl $0x0, (%P3)\n\t"           \
 				     "         popal\n\t"                      \
 				     "         iret\n\t"                       \
 				     "2:\n\t" ::"g"(vector),                   \
-				     "i"(_qm_register_isr), "i"(isr),          \
-				     "i"(&(QM_INT_CONTROLLER->eoi.reg))        \
+				     "i"(_qm_register_isr), "i"(isr)           \
 				     : "%eax", "%ecx", "%edx");                \
 	} while (0)
 #endif /* __iamcu == 1 */

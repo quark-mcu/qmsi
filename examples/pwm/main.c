@@ -47,10 +47,10 @@
  * These values will not work from the Lakemont core as the PWM pins are muxed
  * with the sensor subsystem GPIO pins.
  */
-#define QM_PWM_CH_0_PIN (10)
+#define QM_PWM_CH_0_PIN (63)
 #define QM_PWM_CH_0_FN_GPIO (0)
 #define QM_PWM_CH_0_FN_PWM (1)
-#define QM_PWM_CH_1_PIN (11)
+#define QM_PWM_CH_1_PIN (64)
 #define QM_PWM_CH_1_FN_GPIO (0)
 #define QM_PWM_CH_1_FN_PWM (1)
 #else

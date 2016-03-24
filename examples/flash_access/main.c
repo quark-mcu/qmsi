@@ -52,40 +52,75 @@
  */
 
 #define NUM_DATA_WORDS (0x03)
-#define WR_FLASH_ADDR (0x101C)
-#define PAGE_TO_ERASE (0x02)
-#define PAGE_TO_WRITE (0x02)
+#define WR_PAGE_OFFSET (0x10)
 #define MASS_ERASE_INCLUDE_ROM (0x00)
 #define US_COUNT (0x20)
 #define WAIT_STATES (0x01)
 
+#if (QUARK_D2000)
+#define FLASH_END (0x00200000)
+#elif(QUARK_SE)
+#define FLASH_END (0x40060000)
+#endif
+
 /* This buffer must be at least QM_FLASH_PAGE_SIZE. Practically, this buffer */
 /* may be shared with other buffers to save space. */
 static uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE];
+uint32_t flash_data[NUM_DATA_WORDS] = {0x00010203, 0x04050607, 0x08090A0B};
+
+extern uint32_t __data_lma[];
+extern uint32_t __data_size[];
 
 /* QMSI flash access app example */
 int main(void)
 {
-	qm_flash_config_t cfg_wr, cfg_rd;
-	uint32_t flash_data[NUM_DATA_WORDS] = {0x00010203, 0x04050607,
-					       0x08090A0B};
+	qm_flash_config_t cfg_wr;
+	uint32_t wr_flash_addr;
+	uint32_t app_end;
+	uint32_t page_num;
+	uint32_t flash_base;
+	uint32_t flash_num;
+	const unsigned int flash_page_size = QM_FLASH_PAGE_SIZE * 4;
+
+#if (QUARK_D2000)
+	flash_base = QM_FLASH_REGION_SYS_0_BASE;
+	flash_num = QM_FLASH_0;
+#elif(QUARK_SE)
+	flash_base = QM_FLASH_REGION_SYS_1_BASE;
+	flash_num = QM_FLASH_1;
+#endif
+
+	QM_PRINTF("Starting: Flash\n");
+
+	app_end = (uint32_t)__data_lma + (uint32_t)__data_size;
+
+	/* Check there is at least one free flash page after the
+	 * application code */
+	if ((app_end + flash_page_size) > FLASH_END) {
+		QM_PRINTF("Error: No free pages. Quitting.\n");
+		return QM_RC_OK;
+	}
+
+	/* Calculate flash page number, and an MMIO address representing a
+	 * location inside the page */
+	page_num = ((app_end - flash_base) / flash_page_size) + 1;
+	wr_flash_addr = (flash_page_size * page_num) + WR_PAGE_OFFSET;
 
 	cfg_wr.us_count = US_COUNT;
 	cfg_wr.wait_states = WAIT_STATES;
 	cfg_wr.write_disable = QM_FLASH_WRITE_ENABLE;
 
-	qm_flash_set_config(QM_FLASH_0, &cfg_wr);
-	qm_flash_get_config(QM_FLASH_0, &cfg_rd);
+	qm_flash_set_config(flash_num, &cfg_wr);
 
 	/* Requires a 2KB buffer to store flash page. */
-	qm_flash_page_update(QM_FLASH_0, QM_FLASH_REGION_SYS, WR_FLASH_ADDR,
+	qm_flash_page_update(flash_num, QM_FLASH_REGION_SYS, wr_flash_addr,
 			     flash_page_buffer, flash_data, NUM_DATA_WORDS);
 
-	qm_flash_page_erase(QM_FLASH_0, QM_FLASH_REGION_SYS, PAGE_TO_ERASE);
+	qm_flash_page_erase(flash_num, QM_FLASH_REGION_SYS, page_num);
 
-	qm_flash_page_write(QM_FLASH_0, QM_FLASH_REGION_SYS, PAGE_TO_WRITE,
+	qm_flash_page_write(flash_num, QM_FLASH_REGION_SYS, page_num,
 			    flash_data, NUM_DATA_WORDS);
 
-	/*qm_flash_mass_erase(QM_FLASH_0, MASS_ERASE_INCLUDE_ROM);*/
+	QM_PRINTF("Finished: Flash\n");
 	return QM_RC_OK;
 }

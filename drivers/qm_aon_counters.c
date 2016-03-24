@@ -31,6 +31,31 @@
 
 static void (*callback)() = NULL;
 
+static void pt_reset(const qm_scss_aon_t aonc)
+{
+	static bool first_run = true;
+	uint32_t aonc_cfg;
+
+	/* After POR, it is required to wait for one RTC clock cycle before
+	 * asserting QM_AONPT_CTRL_RST.  Note the AON counter is enabled with an
+	 * initial value of 0 at POR.
+	 */
+	if (first_run) {
+		first_run = false;
+
+		/* Ensure the AON counter is enabled */
+		aonc_cfg = QM_SCSS_AON[aonc].aonc_cfg;
+		QM_SCSS_AON[aonc].aonc_cfg = BIT(0);
+
+		while (0 == QM_SCSS_AON[aonc].aonc_cnt) {
+		}
+
+		QM_SCSS_AON[aonc].aonc_cfg = aonc_cfg;
+	}
+
+	QM_SCSS_AON[aonc].aonpt_ctrl |= BIT(1);
+}
+
 void qm_aonpt_isr_0(void)
 {
 	if (callback) {
@@ -38,6 +63,7 @@ void qm_aonpt_isr_0(void)
 	}
 
 	QM_SCSS_AON[0].aonpt_ctrl |= BIT(0); /* Clear pending interrupts */
+	QM_ISR_EOI(QM_IRQ_AONPT_0_VECTOR);
 }
 
 qm_rc_t qm_aonc_enable(const qm_scss_aon_t aonc)
@@ -76,7 +102,7 @@ qm_rc_t qm_aonpt_set_config(const qm_scss_aon_t aonc,
 	} else {
 		callback = NULL;
 	}
-	QM_SCSS_AON[aonc].aonpt_ctrl |= BIT(1); /* Reset the value to count */
+	pt_reset(aonc);
 
 	return QM_RC_OK;
 }
@@ -121,7 +147,7 @@ qm_rc_t qm_aonpt_reset(const qm_scss_aon_t aonc)
 {
 	QM_CHECK(aonc < QM_SCSS_AON_NUM, QM_RC_EINVAL);
 
-	QM_SCSS_AON[aonc].aonpt_ctrl |= BIT(1);
+	pt_reset(aonc);
 
 	return QM_RC_OK;
 }

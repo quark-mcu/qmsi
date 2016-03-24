@@ -54,6 +54,13 @@ void qm_pic_timer_isr(void)
 	if (callback) {
 		callback();
 	}
+
+#if (HAS_APIC)
+	/* Use an invalid vector to avoid acknowledging a valid IRQ */
+	QM_ISR_EOI(0);
+#else
+	QM_ISR_EOI(QM_IRQ_PIC_TIMER_VECTOR);
+#endif
 }
 
 qm_rc_t qm_pic_timer_set_config(const qm_pic_timer_config_t *const cfg)

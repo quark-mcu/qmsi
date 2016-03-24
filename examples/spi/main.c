@@ -104,7 +104,7 @@ int main(void)
 
 	qm_spi_slave_select(QM_SPI_MST_0, QM_SPI_SS_0);
 
-	QM_PRINTF("\nStatus = 0x%08x", qm_spi_get_status(QM_SPI_MST_0));
+	QM_PRINTF("\nStatus = 0x%x", qm_spi_get_status(QM_SPI_MST_0));
 
 	/* Set up the sync transfer struct and call a polled transfer. */
 	polled_xfer_desc.tx = tx_buff;

@@ -29,6 +29,9 @@
 
 #include "qm_scss.h"
 
+#define OSC0_CFG1_SI_FREQ_SEL_MASK (0x00000300)
+#define OSC0_CFG1_SI_FREQ_SEL_OFFS (8)
+
 /* NOTE: Currently user space data / bss section overwrites the ROM data / bss
  * sections, so anything that is set in the ROM will be obliterated once we jump
  * into the user app.
@@ -70,21 +73,36 @@ qm_rc_t clk_sys_set_mode(const clk_sys_mode_t mode, const clk_sys_div_t div)
 	switch (mode) {
 
 	case CLK_SYS_HYB_OSC_32MHZ:
+	case CLK_SYS_HYB_OSC_16MHZ:
+	case CLK_SYS_HYB_OSC_8MHZ:
 	case CLK_SYS_HYB_OSC_4MHZ:
-		QM_SCSS_CCU->osc0_cfg1 |= QM_OSC0_EN_SI_OSC;
-		while (!(QM_SCSS_CCU->osc0_stat1 & QM_OSC0_LOCK_SI)) {
-		};
+		/* Calculate the system clock ticks per microsecond */
 		if (CLK_SYS_HYB_OSC_32MHZ == mode) {
 			sys_ticks_per_us = SYS_TICKS_PER_US_32MHZ / BIT(div);
-			QM_SCSS_CCU->osc0_cfg1 &= OSC0_SI_FREQ_SEL_MASK;
+		} else if (CLK_SYS_HYB_OSC_16MHZ == mode) {
+			sys_ticks_per_us = SYS_TICKS_PER_US_16MHZ / BIT(div);
+		} else if (CLK_SYS_HYB_OSC_8MHZ == mode) {
+			sys_ticks_per_us = SYS_TICKS_PER_US_8MHZ / BIT(div);
 		} else {
 			sys_ticks_per_us = SYS_TICKS_PER_US_4MHZ / BIT(div);
-			QM_SCSS_CCU->osc0_cfg1 |= ~OSC0_SI_FREQ_SEL_MASK;
 		}
+		/* Note: Set (calculate if needed) trim code */
+
+		/* Select the silicon oscillator frequency */
+		QM_SCSS_CCU->osc0_cfg1 &= ~OSC0_CFG1_SI_FREQ_SEL_MASK;
+		QM_SCSS_CCU->osc0_cfg1 |= (mode << OSC0_CFG1_SI_FREQ_SEL_OFFS);
+		/* Enable the silicon oscillator */
+		QM_SCSS_CCU->osc0_cfg1 |= QM_OSC0_EN_SI_OSC;
+		/* Wait for the oscillator to lock */
+		while (!(QM_SCSS_CCU->osc0_stat1 & QM_OSC0_LOCK_SI)) {
+		};
+		/* Switch to silicon oscillator mode */
 		QM_SCSS_CCU->osc0_cfg1 &= ~QM_OSC0_MODE_SEL;
+		/* Set the system clock divider */
 		QM_SCSS_CCU->ccu_sys_clk_ctl =
 		    ccu_sys_clk_ctl | QM_CCU_SYS_CLK_SEL |
 		    (div << QM_CCU_SYS_CLK_DIV_OFFSET);
+		/* Disable the crystal oscillator */
 		QM_SCSS_CCU->osc0_cfg1 &= ~QM_OSC0_EN_CRYSTAL;
 		break;
 

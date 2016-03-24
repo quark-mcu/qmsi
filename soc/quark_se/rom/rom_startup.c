@@ -37,8 +37,19 @@
 /* Address of application's entry point (Flash1) */
 #define ENTRY_POINT_ADDRESS ((void *)0x40030000)
 
-static void spurious_isr(void)
+/* Factory settings for Crystal Oscillator */
+/* 7.45 pF load cap for Crystal */
+#define OSC0_CFG1_OSC0_FADJ_XTAL_DEFAULT (0x4)
+/* Crystal count value set to 5375 */
+#define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_DEFAULT (0x2)
+
+static void aonpt_spurious_isr(void)
 {
+	QM_ISR_EOI(QM_IRQ_AONPT_0_VECTOR);
+}
+static void aongpio_spurious_isr(void)
+{
+	QM_ISR_EOI(QM_IRQ_AONGPIO_0_VECTOR);
 }
 
 /*
@@ -58,6 +69,16 @@ static __inline__ void power_setup(void)
  */
 static __inline__ void clock_setup(void)
 {
+	/* Apply factory settings for Crystal Oscillator stabilization
+	 * These settings adjust the trimming value and the counter value
+	 * for the Crystal Oscillator */
+	QM_SCSS_CCU->osc0_cfg1 &= ~OSC0_CFG1_OSC0_FADJ_XTAL_MASK;
+	QM_SCSS_CCU->osc0_cfg1 |=
+	    (OSC0_CFG1_OSC0_FADJ_XTAL_DEFAULT << OSC0_CFG1_OSC0_FADJ_XTAL_OFFS);
+	QM_SCSS_CCU->osc0_cfg0 &= ~OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_MASK;
+	QM_SCSS_CCU->osc0_cfg0 |= (OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_DEFAULT
+				   << OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_OFFS);
+
 	/* NOTE: Switch to silicon oscillator when trim data is available */
 	clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC, CLK_SYS_DIV_1);
 
@@ -81,8 +102,8 @@ static __inline__ void aon_handle_spurious_irq(void)
 	/* The PIC IRR register may be asserted by the application before a warm
 	 * reset. IRR cannot be cleared by software, so let's just catch this
 	 * single spurious interrupt. */
-	qm_irq_request(QM_IRQ_AONPT_0, spurious_isr);
-	qm_irq_request(QM_IRQ_AONGPIO_0, spurious_isr);
+	qm_irq_request(QM_IRQ_AONPT_0, aonpt_spurious_isr);
+	qm_irq_request(QM_IRQ_AONGPIO_0, aongpio_spurious_isr);
 }
 
 /*

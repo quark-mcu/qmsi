@@ -35,6 +35,8 @@ void qm_fpr_isr_0(void)
 {
 	(*callback[QM_FLASH_0])();
 	QM_FLASH[QM_FLASH_0].mpr_vsts = QM_FPR_MPR_VSTS_VALID;
+
+	QM_ISR_EOI(QM_IRQ_FLASH_0_VECTOR);
 }
 
 #if (QUARK_SE)
@@ -42,6 +44,8 @@ void qm_fpr_isr_1(void)
 {
 	(*callback[QM_FLASH_1])();
 	QM_FLASH[QM_FLASH_1].mpr_vsts = QM_FPR_MPR_VSTS_VALID;
+
+	QM_ISR_EOI(QM_IRQ_FLASH_1_VECTOR);
 }
 #endif
 

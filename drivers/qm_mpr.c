@@ -39,6 +39,8 @@ void qm_mpr_isr(void)
 {
 	(*callback)();
 	QM_MPR->mpr_vsts = QM_MPR_VSTS_VALID;
+
+	QM_ISR_EOI(QM_IRQ_SRAM_VECTOR);
 }
 
 qm_rc_t qm_mpr_set_config(const qm_mpr_id_t id,

@@ -27,21 +27,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### Make all examples makefile
-SUBDIRS := $(filter %/, $(wildcard ./*/))
+### AON GPIO example makefile
 
-ifeq ($(SOC), quark_d2000)
-#### Excluding the non suported modules
-SUBDIRS := $(subst ./aon_gpio/,,${SUBDIRS})
-endif
+### Variables
+APP_NAME = aon_gpio
+SOC ?= quark_se
+BASE_DIR := ../..
+APP_DIR := .
 
-all : p = all
-all : $(SUBDIRS)
-
-clean : p = clean
-clean : $(SUBDIRS)
-
-$(SUBDIRS):
-	$(MAKE) -C $@ $(p)
-
-.PHONY: $(SUBDIRS)
+### Make includes
+include $(BASE_DIR)/examples/app.mk

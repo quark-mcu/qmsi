@@ -58,7 +58,7 @@ static void clear_all_pending_interrupts(void)
 	QM_PWM->timerseoi;
 
 	/* Clear GPIO interrupts. */
-	QM_GPIO->gpio_porta_eoi = -1;
+	QM_GPIO[QM_GPIO_0]->gpio_porta_eoi = -1;
 }
 
 void soc_sleep(void)

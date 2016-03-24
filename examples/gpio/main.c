@@ -39,13 +39,16 @@
  * enabled.
  *
  * On the Intel(R) Quark(TM) Microcontroller D2000 Development Platform PIN_OUT
- * and PIN_INTR are marked "SSO 10" and "A1".
+ * and PIN_INTR are marked "SSO 10" and "A0".
+ * On Atlas Hills, PIN_OUT and PIN_INTR are located on header P4 PIN 42 and 40.
  */
 #define PIN_OUT 0
-#define PIN_INTR 4
+#define PIN_INTR 3
 
 /* Example callback function */
 static void gpio_example_callback(uint32_t);
+
+volatile bool callback_invoked;
 
 int main(void)
 {
@@ -61,6 +64,7 @@ int main(void)
 	cfg.int_debounce = BIT(PIN_INTR); /* Debounce enabled */
 	cfg.int_bothedge = 0x0;		  /* Both edge disabled */
 	cfg.callback = gpio_example_callback;
+	callback_invoked = false;
 
 	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
 
@@ -69,8 +73,12 @@ int main(void)
 	/* Set PIN_OUT to trigger PIN_INTR interrupt */
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
-	if (true != qm_gpio_read_pin(QM_GPIO_0, PIN_OUT)) {
-		QM_PUTS("GPIO pin comparison failed\n");
+
+	while (!callback_invoked) {
+	}
+
+	if (false != qm_gpio_read_pin(QM_GPIO_0, PIN_OUT)) {
+		QM_PUTS("Error: pin comparison failed\n");
 		return 1;
 	}
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
@@ -81,5 +89,7 @@ int main(void)
 
 void gpio_example_callback(uint32_t status)
 {
-	QM_PRINTF("GPIO callback - status register = 0x%lu\n", status);
+	callback_invoked = true;
+	QM_PRINTF("GPIO callback - status register = 0x%u\n", status);
+	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 }

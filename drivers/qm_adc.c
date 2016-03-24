@@ -107,6 +107,8 @@ static void qm_adc_isr_handler(const qm_adc_t adc)
 void qm_adc_0_isr(void)
 {
 	qm_adc_isr_handler(QM_ADC_0);
+
+	QM_ISR_EOI(QM_IRQ_ADC_0_VECTOR);
 }
 
 static void setup_seq_table(const qm_adc_t adc, qm_adc_xfer_t *xfer)

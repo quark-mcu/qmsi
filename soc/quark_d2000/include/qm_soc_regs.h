@@ -44,7 +44,7 @@
 #define HAS_MVIC (1)
 
 /**
- * @defgroup groupMVREG MVL Registers
+ * @defgroup groupD2000REG Quark D2000 Registers
   @{
  */
 
@@ -90,6 +90,12 @@ qm_scss_ccu_reg_t test_scss_ccu;
 
 /* Enable Crystal oscillator*/
 #define QM_OSC0_EN_CRYSTAL BIT(0)
+
+/* Crystal oscillator parameters */
+#define OSC0_CFG1_OSC0_FADJ_XTAL_MASK (0x000F0000)
+#define OSC0_CFG1_OSC0_FADJ_XTAL_OFFS (16)
+#define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_MASK (0x00600000)
+#define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_OFFS (21)
 
 #define QM_OSC0_LOCK_SI BIT(0)
 #define QM_OSC0_LOCK_XTAL BIT(1)
@@ -693,7 +699,7 @@ typedef struct {
 	QM_RW uint32_t ic_hs_spklen; /**< HS spike suppression limit */
 	QM_RW uint32_t
 	    ic_clr_restart_det; /**< clear the RESTART_DET interrupt */
-	QM_RW uint32_t reserved1[20];
+	QM_RW uint32_t reserved1[18];
 	QM_RW uint32_t ic_comp_param_1; /**< Configuration Parameters */
 	QM_RW uint32_t ic_comp_version; /**< Component Version */
 	QM_RW uint32_t ic_comp_type;    /**< Component Type */
@@ -792,15 +798,17 @@ typedef struct {
 #define QM_NUM_GPIO_PINS (25)
 
 #if (UNIT_TEST)
-qm_gpio_reg_t test_gpio;
+qm_gpio_reg_t test_gpio_instance;
+qm_gpio_reg_t *test_gpio[QM_GPIO_NUM];
 
-#define QM_GPIO ((qm_gpio_reg_t *)(&test_gpio))
+#define QM_GPIO test_gpio
 #else
 /** GPIO register base address */
 #define QM_GPIO_BASE (0xB0000C00)
 
 /** GPIO register block */
-#define QM_GPIO ((qm_gpio_reg_t *)QM_GPIO_BASE)
+extern qm_gpio_reg_t *qm_gpio[QM_GPIO_NUM];
+#define QM_GPIO qm_gpio
 #endif
 
 /**
@@ -1025,6 +1033,13 @@ qm_mvic_reg_t test_mvic;
 #endif
 
 #define QM_INT_CONTROLLER QM_MVIC
+/* Signal the interrupt controller that the interrupt was handled.  The vector
+ * argument is ignored. */
+#if !defined(USE_ISR_EOI)
+#define QM_ISR_EOI(vector)
+#else
+#define QM_ISR_EOI(vector) (QM_INT_CONTROLLER->eoi.reg = 0)
+#endif
 
 typedef struct {
 	QM_RW mvic_reg_pad_t ioregsel; /**< Register selector */

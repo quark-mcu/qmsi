@@ -42,6 +42,7 @@ void qm_rtc_isr_0(void)
 
 	/*  clear interrupt */
 	QM_RTC[QM_RTC_0].rtc_eoi;
+	QM_ISR_EOI(QM_IRQ_RTC_0_VECTOR);
 }
 
 qm_rc_t qm_rtc_set_config(const qm_rtc_t rtc, const qm_rtc_config_t *const cfg)

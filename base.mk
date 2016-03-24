@@ -95,6 +95,14 @@ CFLAGS += -fno-asynchronous-unwind-tables
 LDFLAGS += -nostdlib
 LDLIBS += -lc -lnosys -lsoftfp -lgcc
 
+### Config flags
+USE_ISR_EOI ?= true
+
+### If interrupt handling is not done externally, like in Zephyr.
+ifeq ($(USE_ISR_EOI), true)
+CFLAGS += -DUSE_ISR_EOI
+endif
+
 .PHONY: all clean
 
 all: $(APP)

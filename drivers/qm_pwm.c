@@ -41,6 +41,7 @@ void qm_pwm_isr_0(void)
 	if (callback[QM_PWM_0]) {
 		(*callback[QM_PWM_0])(int_status);
 	}
+	QM_ISR_EOI(QM_IRQ_PWM_0_VECTOR);
 }
 
 qm_rc_t qm_pwm_start(const qm_pwm_t pwm, const qm_pwm_id_t id)
