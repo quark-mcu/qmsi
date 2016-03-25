@@ -67,6 +67,14 @@ Building
 The build system is based on the make tool.
 Make sure you have downloaded the toolchain as described in `External Dependencies`_.
 
+Environment
+===========
+You must first set the IAMCU_TOOLCHAIN_DIR environment variable.
+Assuming the toolchain was unpacked into *$HOME/issm_2016.0.019/* and
+that you would find *i586-intel-elfiamcu-gcc* at *$HOME/issm_2016.0.019/tools/compiler/bin*, the variable can be set with:
+
+``export IAMCU_TOOLCHAIN_DIR=$HOME/issm_2016.0.019/tools/compiler/bin``
+
 Targets
 ========
 
