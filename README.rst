@@ -114,6 +114,42 @@ debug mode):
 
 ``make –C examples/hello_world``
 
+Flashing
+========
+
+For flashing the board OpenOCD must be used. You can optionally use gdb
+as a frontend for OpenOCD as described below.
+
+You must first flash a bootstrap rom before flashing an application.
+Assuming the toolchain was unpacked into *$HOME/issm_2016.0.019/*, this can be
+done with:
+
+``$ cd $HOME/issm_2016.0.019/tools/debugger/openocd``
+
+``$ ./bin/openocd -f scripts/board/quark_d2000_onboard.cfg``
+
+``$ gdb``
+
+``(gdb) target remote :3333``
+
+``(gdb) monitor clk32M 5000``
+
+``(gdb) monitor load_image $PATH_TO_QMSI/build/debug/quark_d2000/rom/quark_d2000_rom.bin 0x0``
+
+``(gdb) monitor load_image $PATH_TO_QMSI/examples/hello_world/debug/quark_d2000/bin/hello_world.bin 0x00180000``
+
+Serial Output
+=============
+
+You can check UART console output with picocom or screen:
+
+``$ picocom -b 115200 --imap lfcrlf /dev/ttyUSB0``
+
+or
+
+``$ screen /dev/ttyUSB0 115200``
+
+
 Known Issues and Workarounds
 ****************************
 
