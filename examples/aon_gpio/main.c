@@ -27,48 +27,45 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __QM_VERSION_H__
-#define __QM_VERSION_H__
+#include "qm_gpio.h"
+#include "qm_interrupt.h"
 
-#include "qm_common.h"
-
-/**
- * Version number functions for API.
+/*
+ * QMSI AON GPIO app example
  *
- * @defgroup groupVersion Version
- * @{
+ * This example is QUARK_SE specific.
+ *
+ * On the AtlasHills CRB, PIN_INTR is triggered by pressing push button 0,
+ * which is marked as 'PB0' on the board.
  */
+#define PIN_INTR 4
 
-/**
- * QM API major version number
- */
-#define QM_VER_API_MAJOR 1
+static void aon_gpio_example_callback(uint32_t);
 
-/**
- * QM API minor version number
- */
-#define QM_VER_API_MINOR 0
+int main(void)
+{
+	qm_gpio_port_config_t cfg;
 
-/**
- * QM API patch version number
- */
-#define QM_VER_API_PATCH 1
+	QM_PUTS("AON GPIO example\n");
 
-/**
- * Create a single version number from the major, minor and patch numbers
- */
-#define QM_VER_API_UINT                                                        \
-	((QM_VER_API_MAJOR * 10000) + (QM_VER_API_MINOR * 100) +               \
-	 QM_VER_API_PATCH)
+	/* Request IRQ and write GPIO port config */
+	cfg.direction = 0;		   /* All pins are input */
+	cfg.int_en = BIT(PIN_INTR);	/* Interrupt enabled */
+	cfg.int_type = BIT(PIN_INTR);      /* Edge sensitive interrupt */
+	cfg.int_polarity = ~BIT(PIN_INTR); /* Falling edge */
+	cfg.int_debounce = BIT(PIN_INTR);  /* Debounce enabled */
+	cfg.int_bothedge = 0x0;		   /* Both edge disabled */
+	cfg.callback = aon_gpio_example_callback;
 
-/**
- * Create a version number string from the major, minor and patch numbers
- */
-#define QM_VER_API_STRING                                                      \
-	QM_VER_STRINGIFY(QM_VER_API_MAJOR, QM_VER_API_MINOR, QM_VER_API_PATCH)
+	qm_irq_request(QM_IRQ_AONGPIO_0, qm_aon_gpio_isr_0);
 
-/**
- * @}
- */
+	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
+	QM_PUTS("AON GPIO set up, press the Push Button 0 to trigger the "
+		"interrupt\n");
+	return 0;
+}
 
-#endif /* __QM_VERSION_H__ */
+void aon_gpio_example_callback(uint32_t status)
+{
+	QM_PRINTF("AON GPIO callback - status register = 0x%u\n", status);
+}

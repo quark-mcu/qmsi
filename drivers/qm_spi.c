@@ -84,9 +84,9 @@ qm_spi_reg_t *qm_spi_controllers[QM_SPI_NUM] = {
 #endif
 
 static qm_spi_async_transfer_t *spi_async_transfer[QM_SPI_NUM];
-static uint32_t tx_counter[QM_SPI_NUM], rx_counter[QM_SPI_NUM];
+static volatile uint32_t tx_counter[QM_SPI_NUM], rx_counter[QM_SPI_NUM];
 static uint8_t dfs[QM_SPI_NUM];
-static uint8_t tx_dummy_byte;
+static uint32_t tx_dummy_frame;
 static qm_spi_tmode_t tmode[QM_SPI_NUM];
 
 static void read_frame(const qm_spi_t spi, uint8_t *const rx_buffer)
@@ -211,8 +211,18 @@ static void handle_spi_interrupt(const qm_spi_t spi)
 	qm_spi_async_transfer_t *transfer = spi_async_transfer[spi];
 	uint32_t int_status = controller->isr;
 
-	QM_ASSERT((int_status &
-		   (SPI_ISR_TXOIS | SPI_ISR_RXUIS | SPI_ISR_RXOIS)) == 0);
+	QM_ASSERT((int_status & (SPI_ISR_TXOIS | SPI_ISR_RXUIS)) == 0);
+	if (int_status & SPI_ISR_RXOIS) {
+		transfer->err_callback(transfer->id, QM_RC_SPI_RX_OE);
+		controller->rxoicr;
+		controller->imr = 0;
+		controller->ssienr = 0;
+		return;
+	}
+
+	if (int_status & SPI_ISR_RXFIS) {
+		handle_rx_interrupt(spi);
+	}
 
 	if (transfer->rx_len == rx_counter[spi] &&
 	    transfer->tx_len == tx_counter[spi] &&
@@ -221,25 +231,14 @@ static void handle_spi_interrupt(const qm_spi_t spi)
 		controller->imr = 0;
 		controller->ssienr = 0;
 
-		/* For RX-only, revert back tx_len and tx so we don't
-		 * modify the user's xfer struct.
-		 */
-		if (tmode[spi] == QM_SPI_TMOD_RX) {
-			transfer->tx_len = 0;
-			transfer->tx = NULL;
-		} else {
+		if (tmode[spi] != QM_SPI_TMOD_RX) {
 			transfer->tx_callback(transfer->id, transfer->tx_len);
 		}
 
 		return;
 	}
 
-	if (int_status & SPI_ISR_RXFIS) {
-		handle_rx_interrupt(spi);
-	}
-
-	if (int_status & SPI_ISR_TXEIS &&
-	    transfer->tx_len > tx_counter[spi]) {
+	if (int_status & SPI_ISR_TXEIS && transfer->tx_len > tx_counter[spi]) {
 		handle_tx_interrupt(spi);
 	}
 }
@@ -330,16 +329,16 @@ qm_rc_t qm_spi_transfer(const qm_spi_t spi, qm_spi_transfer_t *const xfer)
 	QM_CHECK(tmode[spi] == QM_SPI_TMOD_RX ? (xfer->tx_len == 0) : 1,
 		 QM_RC_EINVAL);
 
-	uint32_t i_tx = 0;
-	uint32_t i_rx = 0;
+	uint32_t i_tx = xfer->tx_len;
+	uint32_t i_rx = xfer->rx_len;
+	qm_rc_t rc = QM_RC_OK;
 
 	qm_spi_reg_t *const controller = QM_SPI[spi];
 
 	/* Wait for the SPI device to become available. */
 	wait_for_controller(controller);
 
-	/* Save IMR status and mask all the interrupts for now. */
-	uint32_t imr = controller->imr;
+	/* Mask all interrupts, this is a blocking function. */
 	controller->imr = 0;
 
 	/* If we are in RX only or EEPROM Read mode, the ctrlr1 reg holds how
@@ -355,62 +354,54 @@ qm_rc_t qm_spi_transfer(const qm_spi_t spi, qm_spi_transfer_t *const xfer)
 	 * expected rx data has been received.
 	 */
 	uint8_t *rx_buffer = xfer->rx;
-	uint8_t *tx_buffer;
+	uint8_t *tx_buffer = xfer->tx;
+
+	int frames;
 
 	/* RX Only transfers need a dummy byte to be sent for starting.
 	 * This is covered by the databook on page 42.
 	 */
 	if (tmode[spi] == QM_SPI_TMOD_RX) {
-		tx_buffer = &tx_dummy_byte;
-		xfer->tx_len = 1;
-	} else {
-		tx_buffer = xfer->tx;
+		tx_buffer = (uint8_t*)&tx_dummy_frame;
+		i_tx = 1;
 	}
 
-	int frames;
-	while ((i_tx < xfer->tx_len) || (i_rx < xfer->rx_len)) {
-		while (controller->rxflr) {
-			if (i_rx == xfer->rx_len) {
-				break;
-			}
+	while (i_tx || i_rx) {
+		if (controller->risr & SPI_RISR_RXOIR) {
+			rc = QM_RC_SPI_RX_OE;
+			controller->rxoicr;
+			break;
+		}
 
+		while (i_rx && controller->rxflr) {
 			read_frame(spi, rx_buffer);
 			rx_buffer += dfs[spi];
-			i_rx++;
+			i_rx--;
 		}
 
 		frames =
 		    SPI_FIFOS_DEPTH - controller->txflr - controller->rxflr - 1;
-		while (frames > 0) {
-			if (i_tx == xfer->tx_len) {
-				break;
-			}
-
+		while (i_tx && frames) {
 			write_frame(spi, tx_buffer);
 			tx_buffer += dfs[spi];
-			i_tx++;
+			i_tx--;
 			frames--;
 		}
 		/* Databook page 43 says we always need to busy-wait until the
 		 * controller is ready again after writing frames to the TX
 		 * FIFO.
+		 *
+		 * That is only needed for TX or TX_RX transfer modes.
 		 */
-		wait_for_controller(controller);
-	}
-
-	/* For RX-only, revert back tx_len so we don't modify
-	 * the user's xfer struct.
-	 */
-	if (tmode[spi] == QM_SPI_TMOD_RX) {
-		xfer->tx_len = 0;
+		if (tmode[spi] == QM_SPI_TMOD_TX_RX ||
+		    tmode[spi] == QM_SPI_TMOD_TX) {
+			wait_for_controller(controller);
+		}
 	}
 
 	controller->ssienr = 0; /** Disable SPI Device */
 
-	/* Restore original IMR state. */
-	controller->imr = imr;
-
-	return QM_RC_OK;
+	return rc;
 }
 
 qm_rc_t qm_spi_irq_transfer(const qm_spi_t spi,
@@ -455,15 +446,17 @@ qm_rc_t qm_spi_irq_transfer(const qm_spi_t spi,
 	rx_counter[spi] = 0;
 
 	/* Unmask interrupts */
-	controller->imr = SPI_IMR_TXEIM | SPI_IMR_TXOIM | SPI_IMR_RXUIM |
-			  SPI_IMR_RXOIM | SPI_IMR_RXFIM;
-
-	/* RX Only transfers need a dummy byte to be sent for starting.
-	 * This is covered by the databook on page 42.
-	 */
-	if (tmode[spi] == QM_SPI_TMOD_RX) {
-		xfer->tx = &tx_dummy_byte;
-		xfer->tx_len = 1;
+	if (tmode[spi] == QM_SPI_TMOD_TX) {
+		controller->imr = SPI_IMR_TXEIM | SPI_IMR_TXOIM;
+	} else if (tmode[spi] == QM_SPI_TMOD_RX) {
+		controller->imr = SPI_IMR_RXUIM | SPI_IMR_RXOIM |
+				  SPI_IMR_RXFIM;
+		controller->ssienr = 1;
+		write_frame(spi, (uint8_t*)&tx_dummy_frame);
+	} else {
+		controller->imr = SPI_IMR_TXEIM | SPI_IMR_TXOIM |
+				  SPI_IMR_RXUIM | SPI_IMR_RXOIM |
+				  SPI_IMR_RXFIM;
 	}
 
 	controller->ssienr = 1; /** Enable SPI Device */
@@ -474,12 +467,14 @@ qm_rc_t qm_spi_irq_transfer(const qm_spi_t spi,
 void qm_spi_master_0_isr(void)
 {
 	handle_spi_interrupt(QM_SPI_MST_0);
+	QM_ISR_EOI(QM_IRQ_SPI_MASTER_0_VECTOR);
 }
 
 #if (QUARK_SE)
 void qm_spi_master_1_isr(void)
 {
 	handle_spi_interrupt(QM_SPI_MST_1);
+	QM_ISR_EOI(QM_IRQ_SPI_MASTER_1_VECTOR);
 }
 #endif
 
@@ -493,14 +488,6 @@ qm_rc_t qm_spi_transfer_terminate(const qm_spi_t spi)
 	/* Mask the interrupts */
 	controller->imr = 0;
 	controller->ssienr = 0; /** Disable SPI device */
-
-	/* For RX-only, revert back tx_len and tx buffer we don't
-	 * modify the user's xfer struct.
-	 */
-	if (tmode[spi] == QM_SPI_TMOD_RX) {
-		transfer->tx_len = 0;
-		transfer->tx = NULL;
-	}
 
 	if (transfer->tx_callback != NULL) {
 		transfer->tx_callback(transfer->id, tx_counter[spi]);

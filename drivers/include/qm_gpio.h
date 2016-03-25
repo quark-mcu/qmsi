@@ -57,6 +57,9 @@ typedef struct {
  * GPIO Interrupt Service Routine
  */
 void qm_gpio_isr_0(void);
+#if (HAS_AON_GPIO)
+void qm_aon_gpio_isr_0(void);
+#endif /* HAS_AON_GPIO */
 
 /**
  * Set GPIO port configuration. This includes if interrupts are enabled or not,

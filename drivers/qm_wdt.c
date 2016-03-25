@@ -37,6 +37,7 @@ void qm_wdt_isr_0(void)
 {
 	if (callback[QM_WDT_0])
 		callback[QM_WDT_0]();
+	QM_ISR_EOI(QM_IRQ_WDT_0_VECTOR);
 }
 
 qm_rc_t qm_wdt_start(const qm_wdt_t wdt)

@@ -29,19 +29,45 @@
 
 #include "qm_gpio.h"
 
+#ifndef UNIT_TEST
+#if (QUARK_SE)
+qm_gpio_reg_t *qm_gpio[QM_GPIO_NUM] = {(qm_gpio_reg_t *)QM_GPIO_BASE,
+				       (qm_gpio_reg_t *)QM_AON_GPIO_BASE};
+#elif(QUARK_D2000)
+qm_gpio_reg_t *qm_gpio[QM_GPIO_NUM] = {(qm_gpio_reg_t *)QM_GPIO_BASE};
+#endif
+#endif
+
 static void (*callback[QM_GPIO_NUM])(uint32_t);
 
-void qm_gpio_isr_0(void)
+static void gpio_isr(const qm_gpio_t gpio)
 {
-	uint32_t int_status = QM_GPIO[QM_GPIO_0].gpio_intstatus;
+	uint32_t int_status = QM_GPIO[gpio]->gpio_intstatus;
 
-	if (callback[QM_GPIO_0]) {
-		(*callback[QM_GPIO_0])(int_status);
+	if (callback[gpio]) {
+		(*callback[gpio])(int_status);
 	}
 
 	/* This will clear all pending interrupts flags in status */
-	QM_GPIO[QM_GPIO_0].gpio_porta_eoi = int_status;
+	QM_GPIO[gpio]->gpio_porta_eoi = int_status;
+	/* Read back EOI register to avoid a spurious interrupt due to EOI
+	 * propagation delay */
+	QM_GPIO[gpio]->gpio_porta_eoi;
 }
+
+void qm_gpio_isr_0(void)
+{
+	gpio_isr(QM_GPIO_0);
+	QM_ISR_EOI(QM_IRQ_GPIO_0_VECTOR);
+}
+
+#if (HAS_AON_GPIO)
+void qm_aon_gpio_isr_0(void)
+{
+	gpio_isr(QM_AON_GPIO_0);
+	QM_ISR_EOI(QM_IRQ_AONGPIO_0_VECTOR);
+}
+#endif
 
 qm_rc_t qm_gpio_set_config(const qm_gpio_t gpio,
 			   const qm_gpio_port_config_t *const cfg)
@@ -49,18 +75,20 @@ qm_rc_t qm_gpio_set_config(const qm_gpio_t gpio,
 	QM_CHECK(gpio < QM_GPIO_NUM, QM_RC_EINVAL);
 	QM_CHECK(cfg != NULL, QM_RC_EINVAL);
 
-	uint32_t mask = QM_GPIO[gpio].gpio_intmask;
-	QM_GPIO[gpio].gpio_intmask = 0xffffffff;
+	qm_gpio_reg_t *const controller = QM_GPIO[gpio];
 
-	QM_GPIO[gpio].gpio_swporta_ddr = cfg->direction;
-	QM_GPIO[gpio].gpio_inttype_level = cfg->int_type;
-	QM_GPIO[gpio].gpio_int_polarity = cfg->int_polarity;
-	QM_GPIO[gpio].gpio_debounce = cfg->int_debounce;
-	QM_GPIO[gpio].gpio_int_bothedge = cfg->int_bothedge;
+	uint32_t mask = controller->gpio_intmask;
+	controller->gpio_intmask = 0xffffffff;
+
+	controller->gpio_swporta_ddr = cfg->direction;
+	controller->gpio_inttype_level = cfg->int_type;
+	controller->gpio_int_polarity = cfg->int_polarity;
+	controller->gpio_debounce = cfg->int_debounce;
+	controller->gpio_int_bothedge = cfg->int_bothedge;
 	callback[gpio] = cfg->callback;
-	QM_GPIO[gpio].gpio_inten = cfg->int_en;
+	controller->gpio_inten = cfg->int_en;
 
-	QM_GPIO[gpio].gpio_intmask = mask;
+	controller->gpio_intmask = mask;
 
 	return QM_RC_OK;
 }
@@ -71,12 +99,14 @@ qm_rc_t qm_gpio_get_config(const qm_gpio_t gpio,
 	QM_CHECK(gpio < QM_GPIO_NUM, QM_RC_EINVAL);
 	QM_CHECK(cfg != NULL, QM_RC_EINVAL);
 
-	cfg->direction = QM_GPIO[gpio].gpio_swporta_ddr;
-	cfg->int_en = QM_GPIO[gpio].gpio_inten;
-	cfg->int_type = QM_GPIO[gpio].gpio_inttype_level;
-	cfg->int_polarity = QM_GPIO[gpio].gpio_int_polarity;
-	cfg->int_debounce = QM_GPIO[gpio].gpio_debounce;
-	cfg->int_bothedge = QM_GPIO[gpio].gpio_int_bothedge;
+	qm_gpio_reg_t *const controller = QM_GPIO[gpio];
+
+	cfg->direction = controller->gpio_swporta_ddr;
+	cfg->int_en = controller->gpio_inten;
+	cfg->int_type = controller->gpio_inttype_level;
+	cfg->int_polarity = controller->gpio_int_polarity;
+	cfg->int_debounce = controller->gpio_debounce;
+	cfg->int_bothedge = controller->gpio_int_bothedge;
 	cfg->callback = callback[gpio];
 
 	return QM_RC_OK;
@@ -84,7 +114,7 @@ qm_rc_t qm_gpio_get_config(const qm_gpio_t gpio,
 
 bool qm_gpio_read_pin(const qm_gpio_t gpio, const uint8_t pin)
 {
-	return (((QM_GPIO[gpio].gpio_ext_porta) >> pin) & 1);
+	return (((QM_GPIO[gpio]->gpio_ext_porta) >> pin) & 1);
 }
 
 qm_rc_t qm_gpio_set_pin(const qm_gpio_t gpio, const uint8_t pin)
@@ -92,7 +122,7 @@ qm_rc_t qm_gpio_set_pin(const qm_gpio_t gpio, const uint8_t pin)
 	QM_CHECK(gpio < QM_GPIO_NUM, QM_RC_EINVAL);
 	QM_CHECK(pin <= QM_NUM_GPIO_PINS, QM_RC_EINVAL);
 
-	QM_GPIO[gpio].gpio_swporta_dr |= (1 << pin);
+	QM_GPIO[gpio]->gpio_swporta_dr |= (1 << pin);
 
 	return QM_RC_OK;
 }
@@ -102,21 +132,21 @@ qm_rc_t qm_gpio_clear_pin(const qm_gpio_t gpio, const uint8_t pin)
 	QM_CHECK(gpio < QM_GPIO_NUM, QM_RC_EINVAL);
 	QM_CHECK(pin <= QM_NUM_GPIO_PINS, QM_RC_EINVAL);
 
-	QM_GPIO[gpio].gpio_swporta_dr &= ~(1 << pin);
+	QM_GPIO[gpio]->gpio_swporta_dr &= ~(1 << pin);
 
 	return QM_RC_OK;
 }
 
 uint32_t qm_gpio_read_port(const qm_gpio_t gpio)
 {
-	return (QM_GPIO[gpio].gpio_ext_porta);
+	return (QM_GPIO[gpio]->gpio_ext_porta);
 }
 
 qm_rc_t qm_gpio_write_port(const qm_gpio_t gpio, const uint32_t val)
 {
 	QM_CHECK(gpio < QM_GPIO_NUM, QM_RC_EINVAL);
 
-	QM_GPIO[gpio].gpio_swporta_dr = val;
+	QM_GPIO[gpio]->gpio_swporta_dr = val;
 
 	return QM_RC_OK;
 }

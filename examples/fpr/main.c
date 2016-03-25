@@ -30,45 +30,90 @@
 #include "qm_interrupt.h"
 #include "qm_common.h"
 
+#define FPR_SIZE (0x400)
+
+#if (QUARK_D2000)
+#define FLASH_END (0x00200000)
+#elif(QUARK_SE)
+#define FLASH_END (0x40060000)
+#endif
+
+static volatile bool callback_invoked = false;
+
 static void fpr_example_cb()
 {
 	QM_PUTS("FPR Violation!");
+	callback_invoked = true;
 }
 
 /**
  * QMSI FPR sample application: this example uses an FPR to lock read
- * on the FLASH and the try read. Before, the violation policy is configured
- * with the example callback.
+ * on the FLASH and then try to read. Before, the violation policy is
+ * configured with the example callback.
  */
+
+extern uint32_t __data_lma[];
+extern uint32_t __data_size[];
+
 int main(void)
 {
+	uint32_t flash_base;
+	uint32_t fpr_flash;
 	uint32_t value;
+	uint32_t app_end;
+	uint32_t address;
+	uint8_t low_bound;
 	qm_fpr_config_t cfg;
-	/**
-	 * Lower and up bound must be lower than 36
-	 */
-	uint8_t lower_bound = 0x1A;
-	int address =
-	    QM_FLASH_REGION_SYS_0_BASE + ((uint32_t)lower_bound * 0x400) + 1;
 
-	/* Set the violation policy to trigger an interrupt */
+#if (QUARK_D2000)
+	flash_base = QM_FLASH_REGION_SYS_0_BASE;
+	fpr_flash = QM_FLASH_0;
+#elif(QUARK_SE)
+	flash_base = QM_FLASH_REGION_SYS_1_BASE;
+	fpr_flash = QM_FLASH_1;
+#endif
+
+	QM_PRINTF("Starting: FPR\n");
+
+	/* Calculate how much space the application code occupies, so we can
+	 * ensure our FPR does not overlap with it */
+	app_end = (uint32_t)__data_lma + (uint32_t)__data_size;
+
+	if ((app_end + FPR_SIZE + 1) > FLASH_END) {
+		QM_PRINTF("No free pages. Quitting.\n");
+		return 0;
+	}
+
+	/* Calculate 1k-aligned physical flash address for FPR start */
+	low_bound = ((app_end - flash_base) / FPR_SIZE) + 1;
+
+	/* Calculate MMIO address of a location inside the FPR */
+	address = (flash_base + (FPR_SIZE * low_bound)) + 4;
+
+/* Set the violation policy to trigger an interrupt */
+#if (QUARK_D2000)
 	qm_irq_request(QM_IRQ_FLASH_0, qm_fpr_isr_0);
-	qm_fpr_set_violation_policy(FPR_VIOL_MODE_INTERRUPT, QM_FLASH_0,
+#elif(QUARK_SE)
+	qm_irq_request(QM_IRQ_FLASH_1, qm_fpr_isr_1);
+#endif
+
+	qm_fpr_set_violation_policy(FPR_VIOL_MODE_INTERRUPT, fpr_flash,
 				    fpr_example_cb);
 
-	/* Configure MPR to allow R/W from DMA agent that will lock host agent
-	 */
+	/* Configure MPR to allow R/W from DMA agent only */
 	cfg.en_mask = QM_FPR_ENABLE;
 	cfg.allow_agents = QM_FPR_DMA;
-	cfg.up_bound = lower_bound;
-	cfg.low_bound = lower_bound;
+	cfg.up_bound = low_bound + 1;
+	cfg.low_bound = low_bound;
 
-	qm_fpr_set_config(QM_FLASH_0, QM_FPR_0, &cfg, QM_MAIN_FLASH_SYSTEM);
+	qm_fpr_set_config(fpr_flash, QM_FPR_0, &cfg, QM_MAIN_FLASH_SYSTEM);
 
-	/**
-	 * Trigger a violation event by attempting to read in the FLASH
-	 */
+	/* Trigger a violation event by attempting to read in the FLASH */
 	value = REG_VAL(address);
+
+
+	while (false == callback_invoked) {
+	}
 	QM_PUTS("End of sample application");
 	value = value;
 	return 0;

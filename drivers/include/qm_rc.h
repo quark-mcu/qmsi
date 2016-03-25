@@ -51,6 +51,8 @@ typedef enum {
 	/* I2C */
 	QM_RC_I2C_ARB_LOST = 0x100, /* Arbitration lost */
 	QM_RC_I2C_NAK,		    /* Missing acknowledge */
+	/* SPI */
+	QM_RC_SPI_RX_OE = 0x120,    /* RX Fifo Overflow error */
 } qm_rc_t;
 
 #endif /* __QM_RC_H__ */

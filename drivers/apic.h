@@ -106,7 +106,19 @@ static __inline__ void ioapic_register_irq(unsigned int irq,
 	value &= ~LAPIC_VECTOR_MASK;
 	value |= (vector & LAPIC_VECTOR_MASK);
 	value &= ~BIT(13);
-	value &= ~BIT(15);
+
+	switch (irq) {
+	case QM_IRQ_RTC_0:
+	case QM_IRQ_AONPT_0:
+	case QM_IRQ_WDT_0:
+		/* positive edge */
+		value &= ~BIT(15);
+		break;
+	default:
+		/* high level */
+		value |= BIT(15);
+		break;
+	}
 
 	_ioapic_set_redtbl_entry_lo(irq, value);
 }

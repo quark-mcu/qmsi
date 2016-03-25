@@ -59,6 +59,8 @@ void qm_ac_isr(void)
 
 	/* Clear all pending interrupts */
 	QM_SCSS_CMP->cmp_stat_clr = int_status;
+
+	QM_ISR_EOI(QM_IRQ_AC_VECTOR);
 }
 
 qm_rc_t qm_ac_get_config(qm_ac_config_t *const config)

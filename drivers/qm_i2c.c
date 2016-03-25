@@ -35,7 +35,7 @@
 #define SPK_LEN_SS (1)
 #define SPK_LEN_FS_FSP (2)
 
-static qm_i2c_speed_t i2c_speed_mode = QM_I2C_SPEED_STD;
+static qm_i2c_speed_t i2c_speed_mode[QM_I2C_NUM];
 
 static qm_i2c_transfer_t i2c_transfer[QM_I2C_NUM];
 static uint32_t i2c_write_pos[QM_I2C_NUM], i2c_read_pos[QM_I2C_NUM],
@@ -158,10 +158,11 @@ static void qm_i2c_isr_handler(const qm_i2c_t i2c)
 		}
 
 		/* TX read command */
+		count_tx = QM_I2C_FIFO_SIZE -
+			   (QM_I2C[i2c].ic_txflr + QM_I2C[i2c].ic_rxflr + 1);
+
 		while (i2c_transfer[i2c].rx_len &&
-		       (i2c_transfer[i2c].tx_len == 0) &&
-		       (QM_I2C_FIFO_SIZE -
-			(QM_I2C[i2c].ic_txflr + QM_I2C[i2c].ic_rxflr + 1))) {
+		       (i2c_transfer[i2c].tx_len == 0) && count_tx) {
 			count_tx--;
 			i2c_transfer[i2c].rx_len--;
 
@@ -192,12 +193,14 @@ static void qm_i2c_isr_handler(const qm_i2c_t i2c)
 void qm_i2c_0_isr(void)
 {
 	qm_i2c_isr_handler(QM_I2C_0);
+	QM_ISR_EOI(QM_IRQ_I2C_0_VECTOR);
 }
 
 #if (QUARK_SE)
 void qm_i2c_1_isr(void)
 {
 	qm_i2c_isr_handler(QM_I2C_1);
+	QM_ISR_EOI(QM_IRQ_I2C_1_VECTOR);
 }
 #endif
 
@@ -315,7 +318,7 @@ qm_rc_t qm_i2c_set_config(const qm_i2c_t i2c, const qm_i2c_config_t *const cfg)
 			QM_I2C[i2c].ic_fs_scl_lcnt = lcnt;
 		}
 
-		i2c_speed_mode = cfg->speed;
+		i2c_speed_mode[i2c] = cfg->speed;
 		break;
 
 	case QM_I2C_SLAVE:
@@ -350,7 +353,7 @@ qm_rc_t qm_i2c_get_config(const qm_i2c_t i2c, qm_i2c_config_t *const cfg)
 		cfg->address_mode =
 		    (QM_I2C[i2c].ic_con & QM_I2C_IC_CON_10BITADDR_MASTER) >>
 		    QM_I2C_IC_CON_10BITADDR_MASTER_OFFSET;
-		cfg->speed = i2c_speed_mode;
+		cfg->speed = i2c_speed_mode[i2c];
 		break;
 
 	case QM_I2C_SLAVE:
@@ -391,7 +394,7 @@ qm_rc_t qm_i2c_set_speed(const qm_i2c_t i2c, qm_i2c_speed_t speed,
 		break;
 	}
 
-	i2c_speed_mode = speed;
+	i2c_speed_mode[i2c] = speed;
 	QM_I2C[i2c].ic_con = ic_con;
 
 	return QM_RC_OK;
@@ -581,16 +584,27 @@ qm_rc_t qm_i2c_master_irq_transfer(const qm_i2c_t i2c,
 
 	/* set threshold */
 	QM_I2C[i2c].ic_tx_tl = TX_TL;
-	QM_I2C[i2c].ic_rx_tl = RX_TL;
+	if (xfer->rx_len > 0 && xfer->rx_len < (RX_TL + 1)) {
+		/* If 'rx_len' is less than the default threshold, we have to
+		 * change the threshold value so the 'RX FULL' interrupt is
+		 * generated once all data from the transfer is received.
+		 */
+		QM_I2C[i2c].ic_rx_tl = xfer->rx_len - 1;
+	} else {
+		QM_I2C[i2c].ic_rx_tl = RX_TL;
+	}
+
+	/* mask interrupts */
+	QM_I2C[i2c].ic_intr_mask = QM_I2C_IC_INTR_MASK_ALL;
+
+	/* enable controller */
+	controller_enable(i2c);
 
 	/* unmask interrupts */
 	QM_I2C[i2c].ic_intr_mask |=
 	    QM_I2C_IC_INTR_MASK_RX_UNDER | QM_I2C_IC_INTR_MASK_RX_OVER |
 	    QM_I2C_IC_INTR_MASK_RX_FULL | QM_I2C_IC_INTR_MASK_TX_OVER |
 	    QM_I2C_IC_INTR_MASK_TX_EMPTY | QM_I2C_IC_INTR_MASK_TX_ABORT;
-
-	/* enable controller */
-	controller_enable(i2c);
 
 	return QM_RC_OK;
 }

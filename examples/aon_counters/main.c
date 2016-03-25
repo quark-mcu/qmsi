@@ -49,7 +49,7 @@ int main(void)
 
 	c_val = qm_aonc_get_value(QM_SCSS_AON_0);
 	if (c_val) {
-		QM_PRINTF("Always-on Counter value: %lu\n", c_val);
+		QM_PRINTF("Always-on Counter value: %u\n", c_val);
 	} else {
 		QM_PRINTF("ERROR: Could not read aonc value\n");
 	}
@@ -72,7 +72,7 @@ int main(void)
 	/* Get the value of the Always-on Periodic Timer */
 	pt_val = qm_aonpt_get_value(QM_SCSS_AON_0);
 	if (pt_val) {
-		QM_PRINTF("Always-on Periodic Timer value: %lu\n", pt_val);
+		QM_PRINTF("Always-on Periodic Timer value: %u\n", pt_val);
 	} else {
 		QM_PRINTF("ERROR: Could not read Periodic timer value\n\n");
 	}

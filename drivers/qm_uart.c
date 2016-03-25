@@ -127,11 +127,13 @@ static void qm_uart_isr_handler(const qm_uart_t uart)
 void qm_uart_0_isr(void)
 {
 	qm_uart_isr_handler(QM_UART_0);
+	QM_ISR_EOI(QM_IRQ_UART_0_VECTOR);
 }
 
 void qm_uart_1_isr(void)
 {
 	qm_uart_isr_handler(QM_UART_1);
+	QM_ISR_EOI(QM_IRQ_UART_1_VECTOR);
 }
 
 qm_rc_t qm_uart_set_config(const qm_uart_t uart, const qm_uart_config_t *cfg)

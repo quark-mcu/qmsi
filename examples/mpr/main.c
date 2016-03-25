@@ -31,12 +31,17 @@
 #include "qm_common.h"
 #include "qm_scss.h"
 
-extern char __idt_start;
 extern char __heap;
 
 static void mpr_example_callback();
 
 #define MPR_PAGE_SIZE (0x400)
+
+#if (QUARK_D2000)
+#define SRAM_BASE (0x00280000)
+#elif(QUARK_SE)
+#define SRAM_BASE (0xA8000000)
+#endif
 
 /* QMSI MPR sample application: this example uses an MPR to pretect a 1kB page
    of SRAM, and then triggers an MPR violation interrupt. */
@@ -44,29 +49,29 @@ int main(void)
 {
 	qm_mpr_config_t cfg;
 	uint8_t lower_bound;
-	uint32_t heap_offset, sram_base, mpr_base;
+	uint32_t heap_offset, mpr_base;
 
 	QM_PUTS("\nMPR example app start");
 
 	/* we're going to put this MPR in the heap, to ensure it doesn't clash
 	 * with anything else, so we need to figure out the page number that
-	 * corresponds to the start of the heap */
+	 * corresponds to the start of the heap. It is important to note that
+	 * the stack lives at the other end of the heap, and grows down towards
+	 * heap_offset. In a small application like this there is no danger of
+	 * the stack growing into our MPR, but it is something to keep in mind
+	 * when enabling MPRs on the heap. */
 	heap_offset = (uint32_t)&__heap;
+	lower_bound = (uint8_t)((heap_offset - SRAM_BASE) / MPR_PAGE_SIZE) + 1;
 
-	/* the IDT lives at the start of SRAM, so __idt_start gives us the SRAM
-	 * base address in the Lakemont memory map */
-	sram_base = (uint32_t)&__idt_start;
-	lower_bound = (uint8_t)((heap_offset - sram_base) / MPR_PAGE_SIZE) + 1;
-
-	/* get the Lakemont physical address of the start of the MPR */
-	mpr_base = sram_base + (lower_bound * MPR_PAGE_SIZE);
+	/* get the physical address of the start of the MPR */
+	mpr_base = SRAM_BASE + (lower_bound * MPR_PAGE_SIZE);
 
 	/* Set the violation policy to trigger an interrupt */
 	qm_irq_request(QM_IRQ_SRAM, qm_mpr_isr);
 	qm_mpr_set_violation_policy(MPR_VIOL_MODE_INTERRUPT,
 				    mpr_example_callback);
 
-	/* Configure MPR to allow R/W from DMA agent */
+	/* Configure MPR to allow R/W from DMA agent only */
 	cfg.en_lock_mask = QM_SRAM_MPR_EN_MASK_ENABLE;
 	cfg.agent_read_en_mask = QM_SRAM_MPR_AGENT_MASK_DMA;
 	cfg.agent_write_en_mask = QM_SRAM_MPR_AGENT_MASK_DMA;

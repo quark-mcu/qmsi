@@ -41,10 +41,11 @@
 
 #define QUARK_SE (1)
 #define HAS_4_TIMERS (1)
+#define HAS_AON_GPIO (1)
 #define HAS_APIC (1)
 
 /**
- * @defgroup groupATKREG ATK Registers
+ * @defgroup groupSEREG Quark SE Registers
   @{
  */
 
@@ -204,9 +205,26 @@ qm_lapic_reg_t test_lapic;
 
 #define QM_INT_CONTROLLER QM_LAPIC
 
+/*
+ * Quark SE has a HW limitation that prevents a LAPIC EOI from being broadcast
+ * into IOAPIC. To trigger this manually we must write the vector number being
+ * serviced into the IOAPIC EOI register.
+ */
+#if !defined(USE_ISR_EOI)
+#define QM_ISR_EOI(vector)
+#else
+#define QM_ISR_EOI(vector)                                                     \
+	do {                                                                   \
+		QM_INT_CONTROLLER->eoi.reg = 0;                                \
+		QM_IOAPIC->eoi.reg = vector;                                   \
+	} while (0)
+#endif
+
 typedef struct {
 	QM_RW apic_reg_pad_t ioregsel; /**< Register selector */
 	QM_RW apic_reg_pad_t iowin;    /**< Register window */
+	QM_RW apic_reg_pad_t reserved[2];
+	QM_RW apic_reg_pad_t eoi; /**< EOI register */
 } qm_ioapic_reg_t;
 
 #define QM_IOAPIC_REG_VER (0x01)    /**< IOAPIC version */
@@ -723,6 +741,7 @@ typedef struct {
 	QM_RW uint32_t ic_rxflr;	  /**< Receive FIFO Level */
 	QM_RW uint32_t ic_sda_hold;       /**< SDA Hold */
 	QM_RW uint32_t ic_tx_abrt_source; /**< Transmit Abort Source */
+	QM_RW uint32_t reserved;
 	QM_RW uint32_t ic_dma_cr;	 /**< SDA Setup */
 	QM_RW uint32_t ic_dma_tdlr;  /**< DMA Transmit Data Level Register */
 	QM_RW uint32_t ic_dma_rdlr;  /**< I2C Receive Data Level Register */
@@ -731,10 +750,11 @@ typedef struct {
 	QM_RW uint32_t ic_enable_status;    /**< Enable Status */
 	QM_RW uint32_t ic_fs_spklen; /**< SS and FS Spike Suppression Limit */
 	QM_RW uint32_t ic_hs_spklen; /**< HS spike suppression limit */
+	QM_RW uint32_t reserved1[19];
 	QM_RW uint32_t ic_comp_param_1; /**< Configuration Parameters */
 	QM_RW uint32_t ic_comp_version; /**< Component Version */
 	QM_RW uint32_t ic_comp_type;    /**< Component Type */
-	QM_RW uint32_t padding[0xC1];   /* Padding (0x400-0xFC)/4 */
+	QM_RW uint32_t padding[0xC0];   /* Padding (0x400-0xFC)/4 */
 } qm_i2c_reg_t;
 
 #if (UNIT_TEST)
@@ -801,7 +821,7 @@ qm_i2c_reg_t test_i2c[QM_I2C_NUM];
 /**
  * Number of GPIO controllers.
  */
-typedef enum { QM_GPIO_0 = 0, QM_GPIO_NUM } qm_gpio_t;
+typedef enum { QM_GPIO_0 = 0, QM_AON_GPIO_0 = 1, QM_GPIO_NUM } qm_gpio_t;
 
 /**
  * GPIO register block type.
@@ -829,20 +849,23 @@ typedef struct {
 	QM_RW uint32_t gpio_config_reg1; /**< GPIO Configuration Register 1 */
 } qm_gpio_reg_t;
 
-#define QM_NUM_GPIO_PINS (26)
+#define QM_NUM_GPIO_PINS (32)
+#define QM_NUM_AON_GPIO_PINS (6)
 
 #if (UNIT_TEST)
-qm_gpio_reg_t test_gpio;
+qm_gpio_reg_t test_gpio_instance;
+qm_gpio_reg_t *test_gpio[QM_GPIO_NUM];
 
-#define QM_GPIO ((qm_gpio_reg_t *)(&test_gpio))
+#define QM_GPIO test_gpio
 #else
 
 /** GPIO register base address */
 #define QM_GPIO_BASE (0xB0000C00)
-#define QM_NUM_GPIO_PINS (26)
+#define QM_AON_GPIO_BASE (QM_SCSS_CCU_BASE + 0xB00)
 
 /** GPIO register block */
-#define QM_GPIO ((qm_gpio_reg_t *)QM_GPIO_BASE)
+extern qm_gpio_reg_t *qm_gpio[QM_GPIO_NUM];
+#define QM_GPIO qm_gpio
 #endif
 
 /**
@@ -1103,6 +1126,12 @@ typedef enum {
 #define QM_OSC0_MODE_SEL BIT(3)
 /* Enable Crystal oscillator*/
 #define QM_OSC0_EN_CRYSTAL BIT(0)
+
+/* Crystal oscillator parameters */
+#define OSC0_CFG1_OSC0_FADJ_XTAL_MASK (0x000F0000)
+#define OSC0_CFG1_OSC0_FADJ_XTAL_OFFS (16)
+#define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_MASK (0x00600000)
+#define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_OFFS (21)
 
 /* USB PLL enable bit*/
 #define QM_USB_PLL_PDLD BIT(0)

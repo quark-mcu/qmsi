@@ -50,6 +50,8 @@
  */
 #define SYS_TICKS_PER_US_XTAL (32)
 #define SYS_TICKS_PER_US_32MHZ (32)
+#define SYS_TICKS_PER_US_16MHZ (16)
+#define SYS_TICKS_PER_US_8MHZ (8)
 #define SYS_TICKS_PER_US_4MHZ (4)
 
 /**
@@ -74,6 +76,8 @@ typedef enum {
  */
 typedef enum {
 	CLK_SYS_HYB_OSC_32MHZ,
+	CLK_SYS_HYB_OSC_16MHZ,
+	CLK_SYS_HYB_OSC_8MHZ,
 	CLK_SYS_HYB_OSC_4MHZ,
 	CLK_SYS_RTC_OSC,
 	CLK_SYS_CRYSTAL_OSC
