@@ -40,7 +40,7 @@ External Dependencies
 License
 *******
 
-Please refer to `COPYING <COPYING>`.
+Please refer to `COPYING <COPYING>`_.
 
 Organization
 ************
