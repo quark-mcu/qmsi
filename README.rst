@@ -32,10 +32,12 @@ This release has been validated with the following hardware:
 External Dependencies
 *********************
 
-* The i586-intel-elfiamcu toolchain is required to build the source code.
+* The IAMCU toolchain (i586-intel-elfiamcu) is required to build the source code.
 * OpenOCD is required to flash applications and ROM files onto the SoC.
 * GDB is optional, it is used as a supplement to OpenOCD for debugging.
-* Intel® System Studio for Microcontrollers is optional.
+* `Intel® System Studio for Microcontrollers <https://software.intel.com/en-us/intel-system-studio-microcontrollers>`_ is optional.
+
+* The toolchain is provided from both within the ISSM package or `standalone tarballs <https://github.com/01org/qmsi/releases/tag/v1.0.1>`_.
 
 License
 *******
@@ -63,6 +65,7 @@ Building
 ********
 
 The build system is based on the make tool.
+Make sure you have downloaded the toolchain as described in `External Dependencies`_.
 
 Targets
 ========
