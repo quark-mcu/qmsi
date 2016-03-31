@@ -114,6 +114,20 @@ debug mode):
 
 ``make –C examples/hello_world``
 
+Advanced build options
+======================
+
+Some operating systems may use their own interrupt system instead of the one
+provided by QMSI. In order to properly integrate with those OSs, the ISRs
+defined in QMSI drivers should not emit 'end-of-interrupt' since this is
+already handled by the OS interrupt system. To achieve that, you should set
+'USE_ISR_EOI=false' when building libqmsi.
+
+For instance, the following command builds libqmsi for Quark D2000 with no
+interrupt handling support.
+
+``make libqmsi SOC=quark_d2000 USE_ISR_EOI=false``
+
 Flashing
 ========
 
