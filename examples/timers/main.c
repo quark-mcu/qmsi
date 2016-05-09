@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,27 +29,30 @@
 
 #include "qm_pwm.h"
 #include "qm_interrupt.h"
-#include "qm_scss.h"
+#include "clk.h"
+#include "qm_isr.h"
 
 #define UDELAY (500000)
 
-void timer_example_callback(uint32_t timer_int);
+void timer_example_callback(void *data, uint32_t timer_int);
 
-uint32_t interrupt_from;
+static volatile bool callback_invoked = false;
 
 /* QMSI timer app example */
 int main(void)
 {
 	/* Variables */
-	qm_pwm_config_t wr_cfg, rd_cfg;
+	qm_pwm_config_t wr_cfg;
 	uint32_t lo_cnt, hi_cnt;
 
+	QM_PRINTF("Starting: Timer\n");
 	/* Initialise timer configuration */
 	wr_cfg.lo_count = 0x100000;
 	wr_cfg.hi_count = 0;
 	wr_cfg.mode = QM_PWM_MODE_TIMER_COUNT;
 	wr_cfg.mask_interrupt = false;
 	wr_cfg.callback = timer_example_callback;
+	wr_cfg.callback_data = NULL;
 
 	/* Enable clocking for the PWM block */
 	clk_periph_enable(CLK_PERIPH_PWM_REGISTER | CLK_PERIPH_CLK);
@@ -58,9 +61,6 @@ int main(void)
 	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &wr_cfg);
 	/* Register the ISR with the SoC */
 	qm_irq_request(QM_IRQ_PWM_0, qm_pwm_isr_0);
-
-	/* Optionally, get config back to see the settings */
-	qm_pwm_get_config(QM_PWM_0, QM_PWM_ID_1, &rd_cfg);
 
 	/* Start Timer 2 */
 	qm_pwm_start(QM_PWM_0, QM_PWM_ID_1);
@@ -81,30 +81,31 @@ int main(void)
 	/* Disable clocking for the PWM block */
 	clk_periph_disable(CLK_PERIPH_PWM_REGISTER);
 
+	if (false == callback_invoked) {
+		QM_PRINTF("Error: Timer did not fire\n");
+	}
+	QM_PRINTF("Finished: Timer\n");
 	return 0;
 }
 
-void timer_example_callback(uint32_t timer_int)
+void timer_example_callback(void *data, uint32_t timer_int)
 {
+	callback_invoked = true;
 	if (timer_int & BIT(QM_PWM_ID_0)) {
 		QM_PUTS("Timer 0 fired.\n");
-		interrupt_from = QM_PWM_ID_0;
 	}
 
 	if (timer_int & BIT(QM_PWM_ID_1)) {
 		QM_PUTS("Timer 1 fired.\n");
-		interrupt_from = QM_PWM_ID_1;
 	}
 
 #if (HAS_4_TIMERS)
 	if (timer_int & BIT(QM_PWM_ID_2)) {
 		QM_PUTS("Timer 2 fired.\n");
-		interrupt_from = QM_PWM_ID_2;
 	}
 
 	if (timer_int & BIT(QM_PWM_ID_3)) {
 		QM_PUTS("Timer 3 fired.\n");
-		interrupt_from = QM_PWM_ID_3;
 	}
 #endif
 }

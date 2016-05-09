@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,52 +27,70 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_scss.h"
+#include "clk.h"
 #include "qm_uart.h"
-#include "qm_pinmux.h"
 
-#define BANNER ("Hello, world!  QMSI clk div example\n\n")
+/* Helper macros to change oscillator settings and print out a string over UART
+ * at 115200bps. */
+
+#define SYSCLK_32MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 17, 6))
+#define SYSCLK_16MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 8, 11))
+#define SYSCLK_8MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 4, 5))
+#define SYSCLK_4MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 2, 3))
+
+#define switch_silicon_osc(freq, sysclk_div)                                   \
+	do {                                                                   \
+		clk_sys_set_mode(CLK_SYS_HYB_OSC_##freq,                       \
+				 CLK_SYS_DIV_##sysclk_div);                    \
+		{                                                              \
+			uint32_t trim;                                         \
+			clk_trim_read(&trim);                                  \
+			QM_PRINTF("\tsource: silicon osc " #freq               \
+				  " (trim code: 0x%x), divisor: " #sysclk_div  \
+				  "\n",                                        \
+				  (unsigned int)trim);                         \
+		}                                                              \
+	} while (0);
+
+#define switch_xtal_osc(sysclk_div)                                            \
+	do {                                                                   \
+		clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC,                          \
+				 CLK_SYS_DIV_##sysclk_div);                    \
+		QM_PUTS("\tsource: XTAL osc (32MHz), divisor: " #sysclk_div);  \
+	} while (0);
 
 /* QMSI clock divisor app example */
 int main(void)
 {
-	qm_uart_config_t cfg;
+	QM_PUTS("Starting: QMSI clock divisor example");
 
-	clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC, CLK_SYS_DIV_1);
+	QM_PUTS("\n32MHz sysclk:");
+	stdout_uart_setup(SYSCLK_32MHZ_TO_UART_115200BPS);
+	switch_silicon_osc(32MHZ, 1);
+	switch_xtal_osc(1);
 
-	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 17, 6);
-	cfg.line_control = QM_UART_LC_8N1;
-	cfg.hw_fc = false;
+	QM_PUTS("\n16MHz sysclk:");
+	stdout_uart_setup(SYSCLK_16MHZ_TO_UART_115200BPS);
+	switch_silicon_osc(32MHZ, 2);
+	switch_silicon_osc(16MHZ, 1);
+	switch_xtal_osc(2);
 
-#if (QUARK_SE)
-	qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
-	qm_pmux_input_en(QM_PIN_ID_18, true);
-#else
-	qm_pmux_select(QM_PIN_ID_12, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_2);
-	qm_pmux_input_en(QM_PIN_ID_13, true);
-#endif
+	QM_PUTS("\n8MHz sysclk:");
+	stdout_uart_setup(SYSCLK_8MHZ_TO_UART_115200BPS);
+	switch_silicon_osc(32MHZ, 4);
+	switch_silicon_osc(16MHZ, 2);
+	switch_silicon_osc(8MHZ, 1);
+	switch_xtal_osc(4);
 
-	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_UARTA_REGISTER);
-	qm_uart_set_config(QM_UART_0, &cfg);
+	QM_PUTS("\n4MHz sysclk:");
+	stdout_uart_setup(SYSCLK_4MHZ_TO_UART_115200BPS);
+	switch_silicon_osc(32MHZ, 8);
+	switch_silicon_osc(16MHZ, 4);
+	switch_silicon_osc(8MHZ, 2);
+	switch_silicon_osc(4MHZ, 1);
+	switch_xtal_osc(8);
 
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)BANNER, sizeof(BANNER));
-	/* Change clock speed to 16MHz, and reconf we still get 115200 BAUD. */
-	clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC, CLK_SYS_DIV_2);
-	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 8, 11);
-	qm_uart_set_config(QM_UART_0, &cfg);
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)BANNER, sizeof(BANNER));
-
-	/* Change clock speed to 4 MHz. Div to 1. */
-	clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC, CLK_SYS_DIV_8);
-	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 2, 3);
-	qm_uart_set_config(QM_UART_0, &cfg);
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)BANNER, sizeof(BANNER));
-
-	clk_gpio_db_set_div(CLK_GPIO_DB_DIV_2);
-	clk_ext_set_div(CLK_EXT_DIV_4);
-	clk_rtc_set_div(CLK_RTC_DIV_8);
+	QM_PUTS("Finished: QMSI clock divisor example");
 
 	return 0;
 }

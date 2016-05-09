@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,15 +29,23 @@
 
 ### Variables
 DRV_DIR = $(BASE_DIR)/drivers
-OBJ_DIRS += $(DRV_DIR)/$(BUILD)
+OBJ_DIRS += $(DRV_DIR)/$(BUILD)/$(SOC)/$(TARGET)
 LMT_SOURCES = $(wildcard $(DRV_DIR)/*.c)
-OBJECTS += $(addprefix $(DRV_DIR)/$(BUILD)/$(SOC)/$(OBJ)/,$(notdir $(LMT_SOURCES:.c=.o)))
+ifeq ($(TARGET), sensor)
+### Excluding the pic timer in the SENSOR build
+LMT_SOURCES := $(subst qm_pic_timer.c,,${LMT_SOURCES})
+endif
+### Excluding the mailbox the d2000 build
+ifeq ($(SOC), quark_d2000)
+LMT_SOURCES := $(subst qm_mailbox.c,,${LMT_SOURCES})
+endif
+OBJECTS += $(addprefix $(DRV_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(LMT_SOURCES:.c=.o)))
 
 ### Flags
 CFLAGS += -I$(DRV_DIR)
 CFLAGS += -I$(DRV_DIR)/include
 
 ### Build C files
-$(DRV_DIR)/$(BUILD)/$(SOC)/$(OBJ)/%.o: $(DRV_DIR)/%.c
-	$(call mkdir, $(DRV_DIR)/$(BUILD)/$(SOC)/$(OBJ))
+$(DRV_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(DRV_DIR)/%.c
+	$(call mkdir, $(DRV_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<

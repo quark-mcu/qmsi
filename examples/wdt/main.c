@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,8 +29,9 @@
 
 #include "qm_wdt.h"
 #include "qm_interrupt.h"
+#include "qm_isr.h"
 
-void wdt_example_callback(void);
+void wdt_example_callback(void *);
 
 volatile uint32_t wdt_fired;
 
@@ -50,6 +51,9 @@ volatile uint32_t wdt_fired;
 int main(void)
 {
 	qm_wdt_config_t wr_cfg;
+
+	QM_PRINTF("Starting: WDT\n");
+
 	wr_cfg.timeout = QM_WDT_2_POW_17_CYCLES;
 	wr_cfg.mode = QM_WDT_MODE_INTERRUPT_RESET;
 	wr_cfg.callback = wdt_example_callback;
@@ -65,11 +69,12 @@ int main(void)
 	while (wdt_fired < MAX_WDT_FIRINGS) {
 	}
 	QM_PRINTF("Watchdog fired %d times\n", MAX_WDT_FIRINGS);
+	QM_PRINTF("Finished: WDT\n");
 	return 0;
 }
 
 /* WDT Requires a callback, there is no interrupt enable / disable. */
-void wdt_example_callback(void)
+void wdt_example_callback(void *data)
 {
 	wdt_fired++;
 	qm_wdt_reload(QM_WDT_0);

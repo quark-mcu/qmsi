@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,18 @@ ENTRY(_rom_start)
 
 MEMORY
 {
-	rom_data (r)	: ORIGIN = 0x00000000, LENGTH = 0x150		/* rom manufacturing data */
-	rom (rw)	: ORIGIN = 0x00000150, LENGTH = 8K - 0x150	/* rom */
-	esram_idt (rw)	: ORIGIN = 0x00280000, LENGTH = 0x1A0		/* idt (52 gates) */
-	esram (rw)	: ORIGIN = 0x002801A0, LENGTH = 8K - 1K - 0x1A0	/* esram: ram size - stack - idt*/
-	stack (rw)	: ORIGIN = 0x00281C00, LENGTH = 1K		/* stack */
+	/* ROM manufacturing data */
+	rom_data (r)	: ORIGIN = 0x00000000, LENGTH = 0x150
+	/* ROM: 8K - ROM manufacturing data - ROM version */
+	rom (rw)	: ORIGIN = 0x00000150, LENGTH = 8K - 0x150 - 0x4
+	/* ROM version */
+	rom_ver (r)	: ORIGIN = 0x00001FFC, LENGTH = 0x4
+	/* Interrupt descriptor table (IDT) (52 gates) */
+	esram_idt (rw)	: ORIGIN = 0x00280000, LENGTH = 0x1A0
+	/* ESRAM: RAM size - stack - IDT */
+	esram (rw)	: ORIGIN = 0x002801A0, LENGTH = 8K - 1K - 0x1A0
+	/* Stack */
+	stack (rw)	: ORIGIN = 0x00281C00, LENGTH = 1K
 }
 
 /* Stack definition */
@@ -64,7 +71,7 @@ SECTIONS
 	.rodata :
 	{
 		*(.rdata*)
-		*(.rodata*)        /* .rodata*   sections (constants, strings, etc.) */
+		*(.rodata*)  /* .rodata* sections (constants, strings, etc.) */
 	} >rom
 
 	.data :
@@ -77,6 +84,19 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 	} >esram  AT>esram
+
+	.fill :
+	{
+		FILL(0xFF);
+		. = ORIGIN(rom) + LENGTH(rom) - 1;
+		BYTE(0xFF);
+	} > rom
+
+	. = ORIGIN(rom_ver);
+	.rom_version :
+	{
+		KEEP(*(.rom_version*))
+	} >rom_ver
 
 	/* Symbols for C runtime init code. */
 	__data_lma = LOADADDR(.data);

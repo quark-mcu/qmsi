@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -63,9 +63,11 @@
 #define FLASH_END (0x40060000)
 #endif
 
-/* This buffer must be at least QM_FLASH_PAGE_SIZE. Practically, this buffer */
-/* may be shared with other buffers to save space. */
-static uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE];
+/*
+ * This buffer must be at least QM_FLASH_PAGE_SIZE_DWORDS. Practically, this
+ * buffer may be shared with other buffers to save space.
+ */
+static uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE_DWORDS];
 uint32_t flash_data[NUM_DATA_WORDS] = {0x00010203, 0x04050607, 0x08090A0B};
 
 extern uint32_t __data_lma[];
@@ -80,7 +82,6 @@ int main(void)
 	uint32_t page_num;
 	uint32_t flash_base;
 	uint32_t flash_num;
-	const unsigned int flash_page_size = QM_FLASH_PAGE_SIZE * 4;
 
 #if (QUARK_D2000)
 	flash_base = QM_FLASH_REGION_SYS_0_BASE;
@@ -91,20 +92,24 @@ int main(void)
 #endif
 
 	QM_PRINTF("Starting: Flash\n");
-
 	app_end = (uint32_t)__data_lma + (uint32_t)__data_size;
 
-	/* Check there is at least one free flash page after the
-	 * application code */
-	if ((app_end + flash_page_size) > FLASH_END) {
+	/*
+	 * Check there is at least one free flash page after the application
+	 * code
+	 */
+	if ((app_end + QM_FLASH_PAGE_SIZE_BYTES) > FLASH_END) {
 		QM_PRINTF("Error: No free pages. Quitting.\n");
-		return QM_RC_OK;
+		return 0;
 	}
 
-	/* Calculate flash page number, and an MMIO address representing a
-	 * location inside the page */
-	page_num = ((app_end - flash_base) / flash_page_size) + 1;
-	wr_flash_addr = (flash_page_size * page_num) + WR_PAGE_OFFSET;
+	/*
+	 * Calculate flash page number, and an MMIO address representing a
+	 * location inside the page
+	 */
+	page_num = ((app_end - flash_base) / QM_FLASH_PAGE_SIZE_BYTES) + 1;
+	wr_flash_addr =
+	    (QM_FLASH_PAGE_SIZE_BYTES * page_num) + WR_PAGE_OFFSET;
 
 	cfg_wr.us_count = US_COUNT;
 	cfg_wr.wait_states = WAIT_STATES;
@@ -122,5 +127,5 @@ int main(void)
 			    flash_data, NUM_DATA_WORDS);
 
 	QM_PRINTF("Finished: Flash\n");
-	return QM_RC_OK;
+	return 0;
 }

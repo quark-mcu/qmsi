@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -27,16 +27,30 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-ENTRY(_rom_start)
+ENTRY(_start)
 
 MEMORY
 {
-	rom_data (rw)	: ORIGIN = 0xFFFFE000, LENGTH = 1K		/* rom manufacturing data */
-	rom (rw)	: ORIGIN = 0xFFFFE400, LENGTH = 7K - 16		/* rom */
-	esram_idt (rw)	: ORIGIN = 0xA8000000, LENGTH = 0x220		/* idt (68 gates) */
-	esram (rw)	: ORIGIN = 0xA8000220, LENGTH = 80K - 1K - 0x220 /* esram: ram size - stack - idt */
-	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K		/* stack */
+	/* ROM manufacturing data */
+	rom_data (rw)   : ORIGIN = 0xFFFFE000, LENGTH = 1K
+	/* ROM: 8K - ROM version - reset vector - manufacturing data */
+	rom (rw)	: ORIGIN = 0xFFFFE400, LENGTH = 8K - 0x4 - 16 - 1K
+	/* ROM version */
+	rom_ver (r)	: ORIGIN = 0xFFFFFFEC, LENGTH = 0x4
+	reset_vector (r): ORIGIN = 0xFFFFFFF0, LENGTH = 16
+	/* Sensor Subsystem vector table (68 entries) */
+	sensor_vectors (rw) : ORIGIN = 0xA8000000, LENGTH = 68
+	/* Interrupt descriptor table (IDT) (68 gates) */
+	esram_idt (rw)	: ORIGIN = 0xA800A000, LENGTH = 0x220
+	/* ESRAM: half RAM size - stack - IDT */
+	esram (rw)	: ORIGIN = 0xA800A220, LENGTH = 40K - 1K - 0x220
+	/* Stack */
+	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K - 0x4
+	esram_lock (rw)	: ORIGIN = 0xA8013FFC, LENGTH = 0x4
 }
+
+/* Sensor Subsystem reset vector definition */
+__sensor_reset_vector = ORIGIN(sensor_vectors);
 
 /* Stack definition */
 __stack_start = ORIGIN(stack) + LENGTH(stack);
@@ -45,12 +59,17 @@ __stack_start = ORIGIN(stack) + LENGTH(stack);
 __idt_start = ORIGIN(esram_idt);
 __idt_end = __idt_start + LENGTH(esram_idt);
 
+__esram_lock_start = ORIGIN(esram_lock);
+__esram_lock_end = __esram_lock_start + LENGTH(esram_lock);
+
 SECTIONS
 {
-	. = ORIGIN(rom_data);
-	/* Reserve area for manufacturing data */
-	_rom_data_base = .;
-	my : { } >rom_data
+	. = ORIGIN(reset_vector);
+	.reset_vector :
+	{
+		*(.text.entry)
+		*reset_vector.s.o (.text)
+	} > reset_vector
 
 	. = ORIGIN(rom);
 	.text :
@@ -64,7 +83,7 @@ SECTIONS
 	.rodata :
 	{
 		*(.rdata*)
-		*(.rodata*)        /* .rodata*   sections (constants, strings, etc.) */
+		*(.rodata*) /* .rodata* sections (constants, strings, etc.) */
 	} >rom
 
 	.data :
@@ -77,6 +96,19 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 	} >esram  AT>esram
+
+	.fill :
+	{
+		FILL(0xFF);
+		. = ORIGIN(rom) + LENGTH(rom) - 1;
+		BYTE(0xFF);
+	} > rom
+
+	. = ORIGIN(rom_ver);
+	.rom_version :
+	{
+		KEEP(*(.rom_version*))
+	} >rom_ver
 
 	/* Symbols for C runtime init code. */
 	__data_lma = LOADADDR(.data);

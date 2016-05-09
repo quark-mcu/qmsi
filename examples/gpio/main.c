@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,32 +29,37 @@
 
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_isr.h"
+
+#include <inttypes.h>
 
 /* QMSI GPIO app example
  *
  * This app requires a board to be set up with a jumper cable connecting the
- * pins listed below so the output pin can can trigger an interrupt on the
+ * pins listed below so the output pin can trigger an interrupt on the
  * input pin. PIN_OUT will be configured as an output pin and PIN_INTR will be
  * configured as an input pin with interrupts
  * enabled.
  *
  * On the Intel(R) Quark(TM) Microcontroller D2000 Development Platform PIN_OUT
  * and PIN_INTR are marked "SSO 10" and "A0".
- * On Atlas Hills, PIN_OUT and PIN_INTR are located on header P4 PIN 42 and 40.
+ * On Quark SE development board, PIN_OUT and PIN_INTR are located on header P4
+ * PIN 42 and 40.
  */
 #define PIN_OUT 0
 #define PIN_INTR 3
 
 /* Example callback function */
-static void gpio_example_callback(uint32_t);
+static void gpio_example_callback(void *, uint32_t);
 
 volatile bool callback_invoked;
 
 int main(void)
 {
 	qm_gpio_port_config_t cfg;
+	qm_gpio_state_t state;
 
-	QM_PUTS("GPIO example app\n");
+	QM_PUTS("Starting: GPIO\n");
 
 	/* Request IRQ and write GPIO port config */
 	cfg.direction = BIT(PIN_OUT);
@@ -64,6 +69,7 @@ int main(void)
 	cfg.int_debounce = BIT(PIN_INTR); /* Debounce enabled */
 	cfg.int_bothedge = 0x0;		  /* Both edge disabled */
 	cfg.callback = gpio_example_callback;
+	cfg.callback_data = NULL;
 	callback_invoked = false;
 
 	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
@@ -77,19 +83,21 @@ int main(void)
 	while (!callback_invoked) {
 	}
 
-	if (false != qm_gpio_read_pin(QM_GPIO_0, PIN_OUT)) {
+	if (qm_gpio_read_pin(QM_GPIO_0, PIN_OUT, &state)) {
+		QM_PUTS("Error: read pin failed\n");
+		return -EIO;
+	}
+	if (state != QM_GPIO_HIGH) {
 		QM_PUTS("Error: pin comparison failed\n");
-		return 1;
+		return -EIO;
 	}
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
-
-	QM_PUTS("GPIO example app complete\n");
+	QM_PUTS("Finished: GPIO\n");
 	return 0;
 }
 
-void gpio_example_callback(uint32_t status)
+void gpio_example_callback(void *data, uint32_t status)
 {
 	callback_invoked = true;
 	QM_PRINTF("GPIO callback - status register = 0x%u\n", status);
-	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 }
