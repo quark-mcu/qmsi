@@ -26,6 +26,7 @@ Hardware Compatibility
 
 This release has been validated with the following hardware:
 
+* Intel® Quark™ Microcontroller SE Series.
 * Intel® Quark™ Microcontroller D2000 Series.
 * Intel® Quark™ Microcontroller D2000 Development Platform.
 
@@ -75,8 +76,36 @@ that you would find *i586-intel-elfiamcu-gcc* at *$HOME/issm_2016.0.019/tools/co
 
 ``export IAMCU_TOOLCHAIN_DIR=$HOME/issm_2016.0.019/tools/compiler/bin``
 
-Targets
+SoC Targets
+===========
+
+Both Quark D2000 and Quark SE are supported. You can select them by setting the ``SOC``
+variable.
+
+To build for D2000:
+
+``make SOC=quark_d2000``
+
+To build for Quark SE:
+
+``make SOC=quark_se``
+
+SoC Core
 ========
+
+On Quark SE SoC, there are two separate cores: x86 (Intel Lakemont) and sensor (ARC).
+You can select them by setting the ``TARGET`` variable.
+
+To build for the Lakemont core:
+
+``make SOC=quark_se TARGET=x86``
+
+To build for the ARC core:
+
+``make SOC=quark_se TARGET=sensor``
+
+Build modes
+===========
 
 Debug and release builds are supported setting the ``BUILD`` variable.
 
@@ -88,10 +117,10 @@ To build in release mode:
 
 ``make BUILD=release``
 
-Build modes
-===========
+Targets
+=======
 
-The top level Makefile contains two targets: ``rom`` and ``libqmsi``. The output
+The top level Makefile contains two make targets: ``rom`` and ``libqmsi``. The output
 directory is ``build``.
 
 The ROM must be flashed on the OTP ROM flash region. To build the ``rom``
@@ -119,14 +148,14 @@ Advanced build options
 
 Some operating systems may use their own interrupt system instead of the one
 provided by QMSI. In order to properly integrate with those OSs, the ISRs
-defined in QMSI drivers should not emit 'end-of-interrupt' since this is
-already handled by the OS interrupt system. To achieve that, you should set
-'USE_ISR_EOI=false' when building libqmsi.
+defined in QMSI drivers should be compiled as regular functions (e.g. no
+interrupt-related prologue and epilogue, no end-of-interrupt handling). To
+achieve that, you should set 'ISR=handled' when building libqmsi.
 
 For instance, the following command builds libqmsi for Quark D2000 with no
 interrupt handling support.
 
-``make libqmsi SOC=quark_d2000 USE_ISR_EOI=false``
+``make libqmsi SOC=quark_d2000 ISR=handled``
 
 Flashing
 ========
@@ -185,15 +214,34 @@ Supported features
 
 * Always-On (AON) Counters.
 * Always-On (AON) Periodic Timer.
+* Always-On GPIO.
 * Analog Comparators.
 * Analog-to-Digital Converter (ADC).
 * Clock Control.
+* Direct Memory Access (DMA).
+* DMA support for peripherals:
+
+    + UART master for Lakemont
+    + SPI master for Lakemont
+    + I2C master for Lakemont
 * Flash library.
 * Flash Protection Regions (FPR).
 * General Purpose Input Output (GPIO).
 * Inter-Integrated Circuit (I2C) master.
 * Interrupt Controller Timer.
-* Interrupt Controller.
+* Interrupt Controllers:
+
+    + Quark SE Lakemont (APIC)
+    + Quark SE ARC
+    + Quark D2000 (MVIC)
+* Quark SE Mailbox.
+* Quark SE Sensor Subsystem (ARC):
+
+    + Timer
+    + GPIO
+    + SPI
+    + I2C
+    + ADC
 * Memory Protection Regions (MPR).
 * Pin Muxing.
 * Power states.
@@ -208,7 +256,6 @@ Supported features
 Unsupported Features
 ====================
 
-* Direct Memory Access (DMA).
 * Serial Peripheral Interface (SPI) slave.
 * Inter-Integrated Circuit (I2C) slave.
-* Continuous mode ADC conversions.
+* I2S
