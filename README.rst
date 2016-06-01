@@ -38,7 +38,7 @@ External Dependencies
 * GDB is optional, it is used as a supplement to OpenOCD for debugging.
 * `Intel® System Studio for Microcontrollers <https://software.intel.com/en-us/intel-system-studio-microcontrollers>`_ is optional.
 
-* The toolchain is provided from both within the ISSM package or `standalone tarballs <https://github.com/01org/qmsi/releases/tag/v1.0.1>`_.
+* The toolchain is provided from both within the ISSM package or `standalone tarballs <https://github.com/01org/qmsi/releases/tag/v1.1.0-alpha>`_.
 
 License
 *******
@@ -71,10 +71,16 @@ Make sure you have downloaded the toolchain as described in `External Dependenci
 Environment
 ===========
 You must first set the IAMCU_TOOLCHAIN_DIR environment variable.
-Assuming the toolchain was unpacked into *$HOME/issm_2016.0.019/* and
-that you would find *i586-intel-elfiamcu-gcc* at *$HOME/issm_2016.0.019/tools/compiler/bin*, the variable can be set with:
+Assuming the toolchain was unpacked into *$HOME/issm_2016/* and
+that you would find *i586-intel-elfiamcu-gcc* at *$HOME/issm_2016/tools/compiler/gcc-ia/5.2.1/bin*, the variable can be set with:
 
-``export IAMCU_TOOLCHAIN_DIR=$HOME/issm_2016.0.019/tools/compiler/bin``
+``export IAMCU_TOOLCHAIN_DIR=$HOME/issm_2016/tools/compiler/gcc-ia/5.2.1/bin``
+
+For Quark SE, if developing for the Sensor Subsystem (ARC), you must also set ARCMCU_TOOLCHAIN_DIR.
+Assuming the ARC toolchain was unpacked into *$HOME/issm_2016/* and
+that you would find *arc-elf32-gcc* at *$HOME/issm_2016/tools/compiler/gcc-arc/4.8.5/bin*, the variable can be set with:
+
+``export ARCMCU_TOOLCHAIN_DIR=$HOME/issm_2016/tools/compiler/gcc-arc/4.8.5/bin``
 
 SoC Targets
 ===========
