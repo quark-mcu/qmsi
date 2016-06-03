@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,15 +43,15 @@ int main(void)
 	 * value is 0. The value of this register is cleared on POR or COLD
 	 * reset. The value is preserved across a WARM reset.
 	 */
-	QM_PUTS("Last reset type: ");
 	QM_SCSS_GP->gps3++;
 	switch (QM_SCSS_GP->gps3) {
 	case 1:
-		QM_PUTS("Power on reset or COLD reset.\n");
+		QM_PRINTF("Starting: Reset\n");
+		QM_PUTS("Last reset type: Power on reset or COLD reset.\n");
 		qm_soc_reset(QM_WARM_RESET);
 		break;
 	case 2:
-		QM_PUTS("Warm reset.\n");
+		QM_PUTS("Last reset type: Warm reset.\n");
 		/*
 		 * Cold reset clears the sticky registers, so can not
 		 * track how the reset was issued.
@@ -67,5 +67,6 @@ int main(void)
 		break;
 	}
 
+	QM_PRINTF("Finished: Reset\n");
 	return 0;
 }

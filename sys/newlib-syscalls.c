@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -25,6 +25,13 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/**
+ * newlib syscalls implementation
+ *
+ * @defgroup groupSyscalls Syscalls
+ * @{
  */
 
 /*
@@ -42,7 +49,7 @@
 #include "qm_common.h"
 #include "qm_interrupt.h"
 #include "qm_pinmux.h"
-#include "qm_scss.h"
+#include "clk.h"
 #include "qm_uart.h"
 
 #define ASSERT_STR_HEAD ("\nAssertion failed: file ")
@@ -176,6 +183,22 @@ static int pico_vprintf(const char *format, va_list ap)
 	return len;
 }
 
+/**
+ * @brief This is an minimally useful subset of the POSIX printf() function.
+ *
+ * To reduce code size, this printf() implementation only supports a few
+ * conversion specifiers:
+ *  - @a 'd', @a 'u': for signed and unsigned decimal numbers, respectively;
+ *  - @a 'x', @a 'X': for hexadecimal numbers, downcase and upcase;
+ *  - @a 's': for NULL terminated strings.
+ *
+ * Other limitations:
+ *  - No flag specifier is implemented;
+ *  - No field width specifier is implemented;
+ *  - The only supported length modifier is 'l', which is parsed and ignored,
+ *    on supported archictetures 'int' and 'long int' are both 32 bits long.
+ *  - 32 digits maximum lenght for formatted numbers.
+ */
 int printf(const char *format, ...)
 {
 	va_list ap;
@@ -189,6 +212,7 @@ int printf(const char *format, ...)
 }
 
 static qm_uart_config_t stdout_uart_cfg;
+#define QM_AON_GPIO ((qm_gpio_reg_t *)QM_AON_GPIO_BASE)
 
 void stdout_uart_setup(uint32_t baud_divisors)
 {
@@ -199,6 +223,14 @@ void stdout_uart_setup(uint32_t baud_divisors)
 	qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
 #else
 	qm_pmux_select(QM_PIN_ID_16, QM_PMUX_FN_2);
+
+#if (UART1_FTDI)
+	/* Set AON_GPIO 3 to get UART1 routed to USB/FTDI */
+	QM_AON_GPIO->gpio_swporta_dr |= BIT(3);
+#else
+	QM_AON_GPIO->gpio_swporta_dr &= ~BIT(3);
+#endif /* UART1_FTDI */
+	QM_AON_GPIO->gpio_swporta_ddr |= BIT(3);
 #endif /* STDOUT_UART_0 */
 #else
 #if (STDOUT_UART_0)
@@ -242,7 +274,8 @@ int puts(const char *s)
 void __assert_func(const char *file, int line, const char *func,
 		   const char *failedexpr)
 {
-	int i __attribute__((unused));
+	(void)file;
+	(void)line;
 
 	qm_irq_disable();
 
@@ -250,6 +283,7 @@ void __assert_func(const char *file, int line, const char *func,
 	/* No point in checking for TX outcome at this stage */
 	qm_uart_write_buffer(STDOUT_UART, (uint8_t *)ASSERT_STR_HEAD,
 			     sizeof(ASSERT_STR_HEAD));
+	int i;
 	for (i = 0; func[i]; i++) {
 		qm_uart_write(STDOUT_UART, (uint8_t)func[i]);
 	}
@@ -258,11 +292,18 @@ void __assert_func(const char *file, int line, const char *func,
 	for (i = 0; failedexpr[i]; i++) {
 		qm_uart_write(STDOUT_UART, (uint8_t)failedexpr[i]);
 	}
+#else
+	(void)func;
+	(void)failedexpr;
 #endif /* PUTS_ENABLED || PRINTF_ENABLED */
 
 	while (1) {
 #if (ASSERT_ACTION_HALT)
+#if (QM_SENSOR)
+		__builtin_arc_brk();
+#else
 		__asm__ __volatile__("hlt");
+#endif
 #elif(ASSERT_ACTION_RESET)
 		qm_soc_reset(QM_WARM_RESET);
 #else
@@ -274,6 +315,8 @@ void __assert_func(const char *file, int line, const char *func,
 /* System call not supported */
 int close(int file)
 {
+	(void)file;
+
 	errno = ENOTSUP;
 	return -1;
 }
@@ -281,6 +324,8 @@ int close(int file)
 /* System call not supported */
 int isatty(int file)
 {
+	(void)file;
+
 	errno = ENOTTY;
 	return 0;
 }
@@ -288,6 +333,10 @@ int isatty(int file)
 /* System call not supported */
 int read(int file, char *buf, int len)
 {
+	(void)file;
+	(void)buf;
+	(void)len;
+
 	errno = ENOTSUP;
 	return -1;
 }
@@ -302,7 +351,7 @@ int write(int file, const char *buf, int len)
 	switch (file) {
 	case 1:
 	case 2:
-		if (QM_RC_OK ==
+		if (0 ==
 		    qm_uart_write_buffer(STDOUT_UART, (uint8_t *)buf, len)) {
 			ret = len;
 		} else {
@@ -321,6 +370,10 @@ int write(int file, const char *buf, int len)
 /* System call not supported */
 int lseek(int file, int p, int dir)
 {
+	(void)file;
+	(void)p;
+	(void)dir;
+
 	errno = ENOTSUP;
 	return -1;
 }
@@ -360,3 +413,7 @@ caddr_t sbrk(int incr)
 
 	return prev_prog_break;
 }
+
+/**
+ * @}
+ */

@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef APIC_H
-#define APIC_H
+#ifndef __APIC_H__
+#define __APIC_H__
 
 #include <stdint.h>
 
@@ -102,20 +102,21 @@ static __inline__ void ioapic_register_irq(unsigned int irq,
 
 	value = _ioapic_get_redtbl_entry_lo(irq);
 
-	/* Assign vector and set positive edge trigger */
+	/* Assign vector and set polarity (positive). */
 	value &= ~LAPIC_VECTOR_MASK;
 	value |= (vector & LAPIC_VECTOR_MASK);
 	value &= ~BIT(13);
 
+	/* Set trigger mode. */
 	switch (irq) {
 	case QM_IRQ_RTC_0:
 	case QM_IRQ_AONPT_0:
 	case QM_IRQ_WDT_0:
-		/* positive edge */
+		/* Edge sensitive. */
 		value &= ~BIT(15);
 		break;
 	default:
-		/* high level */
+		/* Level sensitive. */
 		value |= BIT(15);
 		break;
 	}
@@ -141,4 +142,4 @@ static __inline__ void ioapic_unmask_irq(unsigned int irq)
 	_ioapic_set_redtbl_entry_lo(irq, value);
 }
 
-#endif /* APIC_H */
+#endif /* __APIC_H__ */

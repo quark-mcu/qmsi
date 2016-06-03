@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -28,18 +28,35 @@
 #
 
 ### Tools
+ifeq ($(TARGET), sensor)
+PREFIX ?= arc-elf32
+TOOLCHAIN_DIR=$(ARCMCU_TOOLCHAIN_DIR)
+else
 PREFIX ?= i586-intel-elfiamcu
-ifeq ($(IAMCU_TOOLCHAIN_DIR),)
+TOOLCHAIN_DIR=$(IAMCU_TOOLCHAIN_DIR)
+endif
+
+LIBNAME=qmsi
+
+ifeq ($(TOOLCHAIN_DIR),)
 $(info Toolchain path is not defined. Please run:)
+ifeq ($(TARGET), sensor)
+$(info export ARCMCU_TOOLCHAIN_DIR=<TOOLCHAIN_PATH>)
+$(error ARCMCU_TOOLCHAIN_DIR is not defined)
+else
 $(info export IAMCU_TOOLCHAIN_DIR=<TOOLCHAIN_PATH>)
 $(error IAMCU_TOOLCHAIN_DIR is not defined)
+endif
 endif
 
 ### OS specific
 ifeq ($(OS),Windows_NT)
 # Windows variants
-export PATH := $(IAMCU_TOOLCHAIN_DIR);$(PATH)
+export PATH := $(TOOLCHAIN_DIR);$(PATH)
 OSNAME := $(shell wmic os get name)
+# 'more' has to be used for a small file
+CAT := more
+END_CMD := &
 ifneq (,$(findstring Microsoft Windows Server, $(OSNAME)))
 # Windows Server
 mkdir = @mkdir -p $(1) || exit 0
@@ -51,16 +68,45 @@ copy = @copy $(subst /,\,$(1)) $(subst /,\,$(2)) > nul 2>&1 || exit 0
 endif
 else
 # Unix variants
-export PATH := $(IAMCU_TOOLCHAIN_DIR):$(PATH)
+export PATH := $(TOOLCHAIN_DIR):$(PATH)
 mkdir = @mkdir -p $(1)
 copy = @cp $(1) $(2)
+CAT := cat
+END_CMD := ;
 endif
 
-SIZE = $(PREFIX)-size
-OBJCOPY = $(PREFIX)-objcopy
-AR = $(PREFIX)-ar
-CC = $(PREFIX)-gcc
-LD = $(CC)
+### Build verbosity level
+
+V ?= 0
+ifeq ($(V), 0)
+else ifeq ($(V), 1)
+else
+$(error Supported V values are '0' and '1')
+endif
+
+SIZE_0 = @echo "Size $@" && $(PREFIX)-size
+SIZE_1 = $(PREFIX)-size
+SIZE = $(SIZE_$(V))
+
+OBJCOPY_0 = @echo "Objcopy $@" && $(PREFIX)-objcopy
+OBJCOPY_1 = $(PREFIX)-objcopy
+OBJCOPY = $(OBJCOPY_$(V))
+
+AR_0 = @echo "AR $@" && $(PREFIX)-ar
+AR_1 = $(PREFIX)-ar
+AR = $(AR_$(V))
+
+CC_0 = @echo "CC $@" && $(PREFIX)-gcc
+CC_1 = $(PREFIX)-gcc
+CC = $(CC_$(V))
+
+LD_0 = @echo "LD $@" && $(PREFIX)-gcc
+LD_1 = $(PREFIX)-gcc
+LD = $(LD_$(V))
+
+LN_0 = @ln
+LN_1 = ln
+LN = $(LN_$(V))
 
 ### Environment checks
 ifeq ($(BASE_DIR),)
@@ -68,45 +114,99 @@ $(error BASE_DIR is not defined)
 endif
 
 ### Variables
-BUILD ?= debug
+BUILD ?= release
+CFLAGS += -ffunction-sections -fdata-sections
+LDFLAGS += -Xlinker --gc-sections
 ifeq ($(BUILD), debug)
 CFLAGS += -O0 -g -DDEBUG
 else ifeq ($(BUILD), release)
-CFLAGS += -Os -ffunction-sections -fdata-sections
-LDFLAGS += -Xlinker --gc-sections
+CFLAGS += -Os
 else
 $(error Supported BUILD values are 'release' and 'debug')
 endif
 $(info BUILD = $(BUILD))
 
+
+
+CSTD ?= c99
+ifeq ($(CSTD), c99)
+CFLAGS += -std=c99
+else ifeq ($(CSTD), c90)
+CFLAGS += -std=c90
+else
+$(error Supported C standards are 'c99' and 'c90')
+endif
+$(info CSTD = $(CSTD))
+
+
 BIN = bin
 OBJ = obj
 
 BUILD_DIR = $(BASE_DIR)/build
-LIBQMSI_DIR = $(BUILD_DIR)/$(BUILD)/$(SOC)/libqmsi
+LIBQMSI_DIR = $(BUILD_DIR)/$(BUILD)/$(SOC)/$(TARGET)/lib$(LIBNAME)
 LIBQMSI_LIB_DIR = $(LIBQMSI_DIR)/lib
 LIBQMSI_INCLUDE_DIR = $(LIBQMSI_DIR)/include
 
+ifeq ($(OS),Windows_NT)
+VERSION_FILE := $(subst /,\,$(BASE_DIR)/VERSION)
+else
+VERSION_FILE := $(BASE_DIR)/VERSION
+endif
+
+VERSIONS := $(shell $(CAT) $(VERSION_FILE))
+
+QM_VER_API := $(subst QMSI_API=,,$(filter QMSI_API=%,$(VERSIONS)))
+QM_VER_API_MAJOR := $(word 1,$(subst ., ,$(QM_VER_API)))
+QM_VER_API_MINOR := $(word 2,$(subst ., ,$(QM_VER_API)))
+QM_VER_API_PATCH := $(word 3,$(subst ., ,$(QM_VER_API)))
+
+$(info VERSION = '$(QM_VER_API)')
+
+ifeq ($(BUILD), debug)
+LIBQMSI_FILENAME = lib$(LIBNAME)_$(SOC)_$(QM_VER_API)d.a
+LDLIBS_FILENAME = $(LIBNAME)_$(SOC)_$(QM_VER_API)d
+else ifeq ($(BUILD), release)
+LIBQMSI_FILENAME = lib$(LIBNAME)_$(SOC)_$(QM_VER_API).a
+LDLIBS_FILENAME = $(LIBNAME)_$(SOC)_$(QM_VER_API)
+endif
+
 ### Flags
-CFLAGS += -std=c90 -Wall -Wextra -Werror -Wno-unused-parameter
+CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -fmessage-length=0
 CFLAGS += -I$(BASE_DIR)/include
 CFLAGS += -fno-asynchronous-unwind-tables
+CFLAGS += -DQM_VER_API_MAJOR=$(QM_VER_API_MAJOR) \
+	-DQM_VER_API_MINOR=$(QM_VER_API_MINOR) -DQM_VER_API_PATCH=$(QM_VER_API_PATCH)
 LDFLAGS += -nostdlib
-LDLIBS += -lc -lnosys -lsoftfp -lgcc
 
-### Config flags
-USE_ISR_EOI ?= true
-
-### If interrupt handling is not done externally, like in Zephyr.
-ifeq ($(USE_ISR_EOI), true)
-CFLAGS += -DUSE_ISR_EOI
+STDOUT_UART_INIT ?= enable
+ifeq ($(STDOUT_UART_INIT), disable)
+CFLAGS += -DSTDOUT_UART_INIT_DISABLE
 endif
 
-.PHONY: all clean
+ifeq ($(TARGET), sensor)
+CFLAGS += -DQM_SENSOR
+CFLAGS += -ffreestanding
+CFLAGS += -mARCv2EM -mav2em -mno-sdata
+LDFLAGS += -nostartfiles
+LDLIBS += -lc -lgcc
+else
+LDLIBS += -lc -lnosys -lsoftfp -lgcc
+endif
+
+### If interrupt handling is done externally, like in Zephyr.
+ifeq ($(ISR), handled)
+CFLAGS += -DISR_HANDLED
+endif
+
+.PHONY: all clean realclean
 
 all: $(APP)
 
 ### Clean up
-clean:
-	$(RM) -r $(OBJ_DIRS) $(BUILD_DIR)
+### 1) Remove the specified BUILD/SOC/TARGET directory.
+clean::
+	$(RM) -r $(OBJ_DIRS) $(BUILD_DIR)/$(BUILD)/$(SOC)/$(TARGET)
+
+realclean::
+	$(RM) -r $(GENERATED_DIRS) $(BUILD_DIR)

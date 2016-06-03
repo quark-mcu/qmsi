@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,14 +27,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+### Variables
 BOARD_DIR = $(BASE_DIR)/board/drivers
-OBJ_DIRS += $(BOARD_DIR)/$(BUILD)
+OBJ_DIRS += $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)
+DRIVER_SOURCES = $(foreach drv, $(PERIPH), $(wildcard $(BOARD_DIR)/$(drv)/*.c))
+OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(DRIVER_SOURCES:.c=.o)))
+GENERATED_DIRS += $(BOARD_DIR)/$(BUILD)
+
 CFLAGS += -I$(BOARD_DIR)
 
-DRIVER_SOURCES = $(foreach drv, $(PERIPH), $(wildcard $(BOARD_DIR)/$(drv)/*.c))
-
-OBJECTS += $(addprefix $(BOARD_DIR)/$(BUILD)/$(SOC)/$(OBJ)/,$(notdir $(DRIVER_SOURCES:.c=.o)))
-
-$(BOARD_DIR)/$(BUILD)/$(SOC)/$(OBJ)/%.o: $(BOARD_DIR)/bmc150/%.c
-	$(call mkdir, $(BOARD_DIR)/$(BUILD)/$(SOC)/$(OBJ))
+### Build C files
+$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(BOARD_DIR)/bmx1xx/%.c
+	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<

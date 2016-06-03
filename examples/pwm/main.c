@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,9 +29,10 @@
 
 #include "qm_pwm.h"
 #include "qm_interrupt.h"
-#include "qm_scss.h"
+#include "clk.h"
 #include "qm_gpio.h"
 #include "qm_pinmux.h"
+#include "qm_isr.h"
 
 #define UDELAY (500000)
 
@@ -57,7 +58,7 @@
 #error("Unsupported / unspecified processor type")
 #endif
 
-void pwm_example_callback(uint32_t pwm_int);
+void pwm_example_callback(void *data, uint32_t pwm_int);
 void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high);
 
 uint32_t interrupt_from;
@@ -66,15 +67,17 @@ uint32_t interrupt_from;
 int main(void)
 {
 	/* Variables */
-	qm_pwm_config_t wr_cfg, rd_cfg;
+	qm_pwm_config_t wr_cfg;
 	uint32_t lo_cnt, hi_cnt;
 
+	QM_PRINTF("Starting: PWM\n");
 	/* Initialise pwm configuration */
 	wr_cfg.lo_count = 0x100000;
 	wr_cfg.hi_count = 0x100000;
 	wr_cfg.mode = QM_PWM_MODE_PWM;
 	wr_cfg.mask_interrupt = false;
 	wr_cfg.callback = pwm_example_callback;
+	wr_cfg.callback_data = NULL;
 
 	/* Enable clocking for the PWM block */
 	clk_periph_enable(CLK_PERIPH_PWM_REGISTER | CLK_PERIPH_CLK);
@@ -83,9 +86,6 @@ int main(void)
 	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &wr_cfg);
 	/* Register the ISR with the SoC */
 	qm_irq_request(QM_IRQ_PWM_0, qm_pwm_isr_0);
-
-	/* Optionally, get config back to see the settings */
-	qm_pwm_get_config(QM_PWM_0, QM_PWM_ID_1, &rd_cfg);
 
 	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_PWM);
 	/* Start PWM 2 */
@@ -112,6 +112,7 @@ int main(void)
 	/* Disable clocking for the PWM block */
 	clk_periph_disable(CLK_PERIPH_PWM_REGISTER);
 
+	QM_PRINTF("Finished: PWM\n");
 	return 0;
 }
 
@@ -124,14 +125,20 @@ void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
 #if (QUARK_D2000)
 	/* Set pin as output. */
 	qm_gpio_port_config_t cfg;
-	qm_gpio_get_config(QM_GPIO_0, &cfg);
+	cfg.direction = QM_GPIO[QM_GPIO_0]->gpio_swporta_ddr;
+	cfg.int_en = QM_GPIO[QM_GPIO_0]->gpio_inten;
+	cfg.int_type = QM_GPIO[QM_GPIO_0]->gpio_inttype_level;
+	cfg.int_polarity = QM_GPIO[QM_GPIO_0]->gpio_int_polarity;
+	cfg.int_debounce = QM_GPIO[QM_GPIO_0]->gpio_debounce;
+	cfg.int_bothedge = QM_GPIO[QM_GPIO_0]->gpio_int_bothedge;
+	cfg.callback = NULL;
+	cfg.callback_data = NULL;
+
 #elif(QUARK_SE)
 /*
  * Warning: Quark SE pins are on sensor subsystem, need to set sensor subsystem
  * port. This can not be done from the Lakemont core.
  */
-#else
-#error("Unsupported / unspecified processor type")
 #endif
 	uint32_t pin = 0;
 	qm_pmux_fn_t fn = 0;
@@ -164,12 +171,10 @@ void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
  * Warning: Quark SE pins are on sensor subsystem, need to set sensor subsystem
  * port. This can not be done from the Lakemont core.
  */
-#else
-#error("Unsupported / unspecified processor type")
 #endif
 }
 
-void pwm_example_callback(uint32_t pwm_int)
+void pwm_example_callback(void *data, uint32_t pwm_int)
 {
 	if (pwm_int & BIT(QM_PWM_ID_0)) {
 		QM_PUTS("PWM 0 fired.\n");

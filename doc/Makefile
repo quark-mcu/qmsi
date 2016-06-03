@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -26,28 +26,39 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
+MKDIR_HTML = ${mkdir -p html}
 
-DIRS = ../drivers/include
-FILES = $(foreach dir, $(DIRS), $(wildcard $(dir)/*.h))
-PDF_NAME= "Quark Microcontroller Software Interface 1.0.pdf"
+RST_OUTPUT = html
+RST_FILES = $(shell find *.rst)
+RST_BUID = $(shell rst2html $(rst_name) --strict  \
+	   > $(RST_OUTPUT)/$(basename $(rst_name)).html)
 
-.PHONY: clean all html pdf
+RST_BUILD_FILES = $(foreach rst_name,$(RST_FILES),$(RST_BUID))
 
-all: html pdf
+CAT_0 =
+CAT_1 = cat doxygen.log
+CAT = $(CAT_$(V))
 
-html:
-	doxygen Doxyfile
-	cat doxygen.log
+API_HTML = @make -s -C api html
+API_PDF = @make -s -C api pdf
 
-pdf:
-	doxygen DoxyLaTeX
-	cat doxygen.log
-	make -C latex pdf
-	mkdir -p pdf
-	cp latex/refman.pdf pdf/$(PDF_NAME)
+
+.PHONY: clean all api_html api_pdf rst
+
+all: rst api_html api_pdf
+
+buildHtmlDir:
+	@mkdir -p ${RST_OUTPUT}
+
+rst: buildHtmlDir
+	${RST_BUILD_FILES}
+
+api_html:
+	$(API_HTML)
+
+api_pdf:
+	$(API_PDF)
 
 clean:
-	$(RM) -r latex
-	$(RM) -r html
-	$(RM) -r pdf
-	$(RM) doxygen.log
+	$(RM) -r html latex pdf doxygen.log
+	make -C api clean

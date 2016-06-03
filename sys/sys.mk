@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,11 +29,16 @@
 
 ### Variables
 SYS_DIR = $(BASE_DIR)/sys
-OBJ_DIRS += $(SYS_DIR)/$(BUILD)
+OBJ_DIRS += $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)
 SYS_SOURCES = $(wildcard $(SYS_DIR)/*.c)
-OBJECTS += $(addprefix $(SYS_DIR)/$(BUILD)/$(SOC)/$(OBJ)/,$(notdir $(SYS_SOURCES:.c=.o)))
+OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(SYS_SOURCES:.c=.o)))
+GENERATED_DIRS += $(SYS_DIR)/$(BUILD)
 
 ### Build C files
-$(SYS_DIR)/$(BUILD)/$(SOC)/$(OBJ)/%.o: $(SYS_DIR)/%.c
-	$(call mkdir, $(SYS_DIR)/$(BUILD)/$(SOC)/$(OBJ))
+$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(SYS_DIR)/%.c
+	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+ifeq ($(TARGET), sensor)
+include $(SYS_DIR)/sensor/sys.mk
+endif

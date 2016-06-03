@@ -1,10 +1,10 @@
 /*
- *  Copyright (c) 2015, Intel Corporation
+ *  Copyright (c) 2016, Intel Corporation
  *  All rights reserved.
- *  
+ *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- *  
+ *
  *  1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  *  3. Neither the name of the Intel Corporation nor the names of its
  *     contributors may be used to endorse or promote products derived from this
  *     software without specific prior written permission.
- *  
+ *
  *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -29,11 +29,13 @@
 #include "qm_mpr.h"
 #include "qm_interrupt.h"
 #include "qm_common.h"
-#include "qm_scss.h"
+#include "qm_isr.h"
+#include "clk.h"
 
 extern char __heap;
 
-static void mpr_example_callback();
+static void mpr_example_callback(void *);
+static volatile bool callback_invoked = false;
 
 #define MPR_PAGE_SIZE (0x400)
 
@@ -51,7 +53,7 @@ int main(void)
 	uint8_t lower_bound;
 	uint32_t heap_offset, mpr_base;
 
-	QM_PUTS("\nMPR example app start");
+	QM_PRINTF("Starting: MPR\n");
 
 	/* we're going to put this MPR in the heap, to ensure it doesn't clash
 	 * with anything else, so we need to figure out the page number that
@@ -69,7 +71,7 @@ int main(void)
 	/* Set the violation policy to trigger an interrupt */
 	qm_irq_request(QM_IRQ_SRAM, qm_mpr_isr);
 	qm_mpr_set_violation_policy(MPR_VIOL_MODE_INTERRUPT,
-				    mpr_example_callback);
+				    mpr_example_callback, NULL);
 
 	/* Configure MPR to allow R/W from DMA agent only */
 	cfg.en_lock_mask = QM_SRAM_MPR_EN_MASK_ENABLE;
@@ -83,11 +85,15 @@ int main(void)
 	/* trigger a violation event by attempting a write inside the MPR */
 	REG_VAL(mpr_base + 1) = 0xff;
 
-	QM_PUTS("MPR example app complete");
+	while (false == callback_invoked) {
+	}
+
+	QM_PRINTF("MPR Violation!\n");
+	QM_PRINTF("Finished: MPR\n");
 	return 0;
 }
 
-static void mpr_example_callback()
+static void mpr_example_callback(void *data)
 {
-	QM_PUTS("MPR Violation!");
+	callback_invoked = true;
 }

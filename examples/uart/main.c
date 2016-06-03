@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,32 +30,49 @@
 #include "qm_pinmux.h"
 #include "qm_uart.h"
 #include "qm_interrupt.h"
-#include "qm_scss.h"
+#include "qm_isr.h"
+#include "clk.h"
 
-#define BANNER_STR ("Hello, world!  QMSI echo application, Pol'd message.\n\n")
+#define BANNER_STR ("Hello, world!  QMSI echo application, Pol'd message.\n")
 
 #define BANNER_IRQ_ID (1)
-#define BANNER_IRQ ("Hello, world!  QMSI echo application, IRQ'd message.\n\n")
+#define BANNER_IRQ                                                             \
+	("\n\nHello, world!  QMSI echo application, IRQ'd message.\n")
 #define BANNER_IRQ_COMPLETE ("IRQ Transfer completed.\n")
 
-#define RX_STR ("Data received.\n")
-#define ERR_STR ("Transmission error.\n")
+#define BANNER_DMA_ID (2)
+#define BANNER_DMA ("\n\nHello, world!  QMSI echo application, DMA message.\n")
+#define BANNER_DMA_COMPLETE ("DMA Transfer completed.\n")
 
-#define CLR_SCREEN ("\033[2J\033[;H")
+#define RX_STR ("Data received: ")
+#define ERR_STR ("Error: Transmission incomplete.\n")
 
-static void uart_0_example_tx_callback(uint32_t id, uint32_t len);
-static void uart_0_example_rx_callback(uint32_t id, uint32_t len);
-static void uart_0_example_error_callback(uint32_t id, qm_uart_status_t status);
+/* Read callback status polling period (us). */
+#define WAIT_READ_CB_PERIOD_1MS (1000)
+#define TIMEOUT_10SEC (10 * 1000000 / WAIT_READ_CB_PERIOD_1MS)
+/* Wait time (us). */
+#define WAIT_1SEC (1000000)
+#define WAIT_5SEC (5000000)
+
+static void wait_rx_callback_timeout(uint32_t timeout);
+static void uart_example_tx_callback(void *data, int error,
+				     qm_uart_status_t status, uint32_t len);
+static void uart_example_rx_callback(void *data, int error,
+				     qm_uart_status_t status, uint32_t len);
 
 #define BIG_NUMBER_RX (50)
 static uint8_t rx_buffer[BIG_NUMBER_RX];
+static volatile bool rx_callback_invoked = false;
 
 /* Sample UART0 QMSI application. */
 int main(void)
 {
-	qm_uart_config_t cfg, rd_cfg;
-	qm_uart_transfer_t xfer;
-	qm_uart_status_t ret __attribute__((unused));
+	qm_uart_config_t cfg = {0};
+	qm_uart_transfer_t xfer = {0};
+	qm_uart_status_t uart_status __attribute__((unused)) = 0;
+	int ret __attribute__((unused));
+	const uint32_t xfer_irq_data = BANNER_IRQ_ID;
+	const uint32_t xfer_dma_data = BANNER_DMA_ID;
 
 	/* Set divisors to yield 115200bps baud rate. */
 	/* Sysclk is set by boot ROM to hybrid osc in crystal mode (32MHz),
@@ -66,83 +83,208 @@ int main(void)
 	cfg.line_control = QM_UART_LC_8N1;
 	cfg.hw_fc = false;
 
-/* Mux out UART0 tx/rx pins and enable input for rx. */
+/* Mux out STDOUT_UART tx/rx pins and enable input for rx. */
 #if (QUARK_SE)
-	qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
-	qm_pmux_input_en(QM_PIN_ID_18, true);
+	if (STDOUT_UART == QM_UART_0) {
+		qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
+		qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
+		qm_pmux_input_en(QM_PIN_ID_18, true);
+	} else {
+		qm_pmux_select(QM_PIN_ID_16, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_17, QM_PMUX_FN_2);
+		qm_pmux_input_en(QM_PIN_ID_17, true);
+	}
 
 #elif(QUARK_D2000)
-	qm_pmux_select(QM_PIN_ID_12, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_2);
-	qm_pmux_input_en(QM_PIN_ID_13, true);
+	if (STDOUT_UART == QM_UART_0) {
+		qm_pmux_select(QM_PIN_ID_12, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_2);
+		qm_pmux_input_en(QM_PIN_ID_13, true);
+	} else {
+		qm_pmux_select(QM_PIN_ID_20, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_21, QM_PMUX_FN_2);
+		qm_pmux_input_en(QM_PIN_ID_21, true);
+	}
 
 #else
 #error("Unsupported / unspecified processor detected.")
 #endif
 
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_UARTA_REGISTER);
-	qm_uart_set_config(QM_UART_0, &cfg);
-	qm_uart_get_config(QM_UART_0, &rd_cfg);
+	qm_uart_set_config(STDOUT_UART, &cfg);
 
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)CLR_SCREEN,
-			     sizeof(CLR_SCREEN));
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)BANNER_STR,
-			     sizeof(BANNER_STR));
+	QM_PRINTF("Starting: UART\n");
 
-	/* Setup xfer for IRQ transfer. */
+	/* Synchronous TX. */
+	ret = qm_uart_write_buffer(STDOUT_UART, (uint8_t *)BANNER_STR,
+				   sizeof(BANNER_STR));
+	QM_ASSERT(0 == ret);
+
+/* Register the UART interrupts. */
+#if (STDOUT_UART_0)
+	qm_irq_request(QM_IRQ_UART_0, qm_uart_0_isr);
+#elif(STDOUT_UART_1)
+	qm_irq_request(QM_IRQ_UART_1, qm_uart_1_isr);
+#endif
+
+	/* Used on both TX and RX. */
+	xfer.callback_data = (void *)&xfer_irq_data;
+
+	/* IRQ based TX. */
 	xfer.data = (uint8_t *)BANNER_IRQ;
 	xfer.data_len = sizeof(BANNER_IRQ);
-	xfer.fin_callback = uart_0_example_tx_callback;
-	xfer.err_callback = uart_0_example_error_callback;
-	xfer.id = BANNER_IRQ_ID;
+	xfer.callback = uart_example_tx_callback;
+	ret = qm_uart_irq_write(STDOUT_UART, &xfer);
+	QM_ASSERT(QM_UART_IDLE == ret);
 
-	qm_irq_request(QM_IRQ_UART_0, qm_uart_0_isr);
+	clk_sys_udelay(WAIT_1SEC);
 
-	/* Transmit IRQ hello world string. */
-	ret = qm_uart_irq_write(QM_UART_0, &xfer);
-	QM_ASSERT(QM_UART_OK == ret);
+	/* IRQ based RX. */
+	rx_callback_invoked = false;
 
-	/* Setup a non-blocking IRQ RX transfer. */
 	xfer.data = rx_buffer;
 	xfer.data_len = BIG_NUMBER_RX;
-	xfer.fin_callback = uart_0_example_rx_callback;
-	xfer.err_callback = uart_0_example_error_callback;
-	ret = qm_uart_irq_read(QM_UART_0, &xfer);
-	QM_ASSERT(QM_UART_OK == ret);
+	xfer.callback = uart_example_rx_callback;
+	ret = qm_uart_irq_read(STDOUT_UART, &xfer);
+	QM_ASSERT(QM_UART_IDLE == ret);
+	QM_PRINTF("\nWaiting for you to type %d characters... ?\n",
+		  BIG_NUMBER_RX);
 
+	wait_rx_callback_timeout(TIMEOUT_10SEC);
+
+	if (!rx_callback_invoked) {
+		/* RX complete callback was not invoked, we need to terminate
+		 * the transfer in order to grab whatever is available in the RX
+		 * buffer. */
+		ret = qm_uart_irq_read_terminate(STDOUT_UART);
+		QM_ASSERT(0 == ret);
+	} else {
+		/* RX complete callback was invoked and RX buffer was read, we
+		 * wait in case the user does not stop typing after entering the
+		 * exact amount of data that fits the RX buffer, i.e. there may
+		 * be additional bytes in the RX FIFO that need to be read
+		 * before continuing. */
+		clk_sys_udelay(WAIT_5SEC);
+
+		qm_uart_get_status(STDOUT_UART, &uart_status);
+		if (QM_UART_RX_BUSY & uart_status) {
+			/* There is some data in the RX FIFO, let's fetch it. */
+			ret = qm_uart_irq_read(STDOUT_UART, &xfer);
+			QM_ASSERT(0 == ret);
+
+			ret = qm_uart_irq_read_terminate(STDOUT_UART);
+			QM_ASSERT(0 == ret);
+		}
+	}
+
+	/* Register the DMA interrupts. */
+	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
+	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
+
+	/* DMA controller initialization. */
+	ret = qm_dma_init(QM_DMA_0);
+	QM_ASSERT(0 == ret);
+
+	/* Used on both TX and RX. */
+	xfer.callback_data = (void *)&xfer_dma_data;
+
+	/* DMA based TX. */
+	ret =
+	    qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
+				       QM_DMA_MEMORY_TO_PERIPHERAL);
+	QM_ASSERT(0 == ret);
+
+	xfer.data = (uint8_t *)BANNER_DMA;
+	xfer.data_len = sizeof(BANNER_DMA);
+	xfer.callback = uart_example_tx_callback;
+	ret = qm_uart_dma_write(STDOUT_UART, &xfer);
+	QM_ASSERT(0 == ret);
+
+	clk_sys_udelay(WAIT_1SEC);
+
+	/* DMA based RX. */
+	rx_callback_invoked = false;
+
+	ret =
+	    qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
+				       QM_DMA_PERIPHERAL_TO_MEMORY);
+	QM_ASSERT(0 == ret);
+
+	QM_PUTS("Waiting for data on STDOUT_UART (DMA mode) ...");
+	xfer.data = (uint8_t *)rx_buffer;
+	xfer.data_len = BIG_NUMBER_RX;
+	xfer.callback = uart_example_rx_callback;
+	ret = qm_uart_dma_read(STDOUT_UART, &xfer);
+	QM_ASSERT(0 == ret);
+
+	wait_rx_callback_timeout(TIMEOUT_10SEC);
+
+	if (!rx_callback_invoked) {
+		/* RX complete callback was not invoked, we need to terminate
+		 * the transfer in order to grab whatever was written in the RX
+		 * buffer. */
+		ret = qm_uart_dma_read_terminate(STDOUT_UART);
+		QM_ASSERT(0 == ret);
+	}
+
+	QM_PRINTF("\nFinished: UART\n");
 	return 0;
 }
 
-void uart_0_example_tx_callback(uint32_t id, uint32_t len)
+static void wait_rx_callback_timeout(uint32_t timeout)
 {
+	while (!rx_callback_invoked && timeout) {
+		clk_sys_udelay(WAIT_READ_CB_PERIOD_1MS);
+		timeout--;
+	};
+}
+
+void uart_example_tx_callback(void *data, int error, qm_uart_status_t status,
+			      uint32_t len)
+{
+	uint32_t id = *(uint32_t *)data;
+
 	switch (id) {
 
 	case BANNER_IRQ_ID:
-		qm_uart_write_buffer(QM_UART_0, (uint8_t *)BANNER_IRQ_COMPLETE,
+		qm_uart_write_buffer(STDOUT_UART,
+				     (uint8_t *)BANNER_IRQ_COMPLETE,
 				     sizeof(BANNER_IRQ_COMPLETE));
 		break;
 
+	case BANNER_DMA_ID:
+		qm_uart_write_buffer(STDOUT_UART,
+				     (uint8_t *)BANNER_DMA_COMPLETE,
+				     sizeof(BANNER_DMA_COMPLETE));
+		break;
+
 	default:
 		break;
 	}
+
+	QM_PUTS("\n");
 }
 
-void uart_0_example_rx_callback(uint32_t id, uint32_t len)
+void uart_example_rx_callback(void *data, int error, qm_uart_status_t status,
+			      uint32_t len)
 {
-	switch (id) {
+	uint32_t id = *(uint32_t *)data;
 
-	case BANNER_IRQ_ID:
-		qm_uart_write_buffer(QM_UART_0, (uint8_t *)RX_STR,
-				     sizeof(RX_STR));
-		qm_uart_write_buffer(QM_UART_0, rx_buffer, BIG_NUMBER_RX);
-		break;
-	default:
-		break;
+	if (!error || error == -ECANCELED) {
+		/* Transfer successful or RX terminated. */
+		switch (id) {
+		case BANNER_IRQ_ID:
+		case BANNER_DMA_ID:
+			qm_uart_write_buffer(STDOUT_UART, (uint8_t *)RX_STR,
+					     sizeof(RX_STR));
+			qm_uart_write_buffer(STDOUT_UART, rx_buffer, len);
+			rx_callback_invoked = true;
+			break;
+		default:
+			break;
+		}
+	} else {
+		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)ERR_STR,
+				     sizeof(ERR_STR));
 	}
-}
-
-void uart_0_example_error_callback(uint32_t id, qm_uart_status_t status)
-{
-	qm_uart_write_buffer(QM_UART_0, (uint8_t *)ERR_STR, sizeof(ERR_STR));
 }

@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2015, Intel Corporation
+# Copyright (c) 2016, Intel Corporation
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
 # 3. Neither the name of the Intel Corporation nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,7 +27,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+.extern _rom_start
+
 .global _start
+.code16
 
 # Reset vector code
 _start:
@@ -37,11 +40,8 @@ _start:
 	# Invalidate cache.
 	wbinvd
 
-	# JMP rel16 instruction.
-	# The jump offset will be replaced to match ROM code start.
-	# Use machine code to avoid 32 bit compilation.
-	.byte 0xE9
-	.word -3	# jump .
+	# JMP to code
+	jmp _rom_start
 
 	.align 16
 	# Fill in the rest of the 16 bytes.

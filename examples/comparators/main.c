@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2015, Intel Corporation
+ * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,8 +32,11 @@
 #include "qm_comparator.h"
 #include "qm_pinmux.h"
 #include "qm_interrupt.h"
+#include "qm_isr.h"
 
-static void ac_example_callback(uint32_t);
+static void ac_example_callback(void *, uint32_t);
+
+static volatile bool callback_invoked = false;
 
 int main(void)
 {
@@ -48,7 +51,11 @@ int main(void)
 
 	qm_ac_config_t ac_cfg;
 
-	QM_PUTS("Analog Comparators example app start\n");
+	QM_PUTS("Starting: Analog Comparators\n");
+
+#if (QM_SENSOR)
+	QM_SCSS_INT->int_comparators_ss_mask &= ~BIT(0);
+#endif
 
 	/* Set up pin muxing and request IRQ*/
 	qm_pmux_select(QM_PIN_ID_0, QM_PMUX_FN_1);
@@ -65,18 +72,35 @@ int main(void)
 
 	qm_ac_set_config(&ac_cfg);
 
-	QM_PUTS("Analog Comparators example app complete\n");
+	while (false == callback_invoked) {
+	}
+	QM_PUTS("Finished: Analog Comparators\n");
 
 	return 0;
 }
 
-static void ac_example_callback(uint32_t status)
+static void ac_example_callback(void *data, uint32_t status)
 {
-	/* The analog comparators use level triggered interrupts so we will get
-	 * a constant stream of interrupts if we do not mask them. Comment the
-	 * following line if you want to get more than one interrupt. */
+#if (QM_SENSOR)
+	/*
+	 * The analog comparators use level triggered interrupts so we will get
+	 * a constant stream of interrupts if we do not mask them.
+	 */
+
+	/*
+	 * Comment the following line if you want to get more
+	 * than one interrupt on the sensor subsystem.
+	 */
+	QM_SCSS_INT->int_comparators_ss_mask |= BIT(0);
+#else
+	/*
+	 * Comment the following line if you want to get more
+	 * than one interrupt on the x86 core.
+	 */
 	QM_SCSS_INT->int_comparators_host_mask |= BIT(0);
+#endif
 
 	QM_PUTS("Comparator interrupt fired");
 	QM_ASSERT(0x1 == status);
+	callback_invoked = true;
 }
