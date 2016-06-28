@@ -37,60 +37,9 @@
 #include "clk.h"
 
 #include "xmodem_io.h"
+#include "../../dm_comm.h"
 
-/* NOTE: move this define to a bootloader configuration file */
-#define XMODEM_UART (0)
-
-#define XMODEM_UART_TIMEOUT_S (3)
-
-#define XMODEM_UART_DIVISOR BOOTROM_UART_115200
-
-/* NOTE: to do: move this macros to SoC-specific header files */
-#if (QUARK_SE)
-#if (XMODEM_UART == 0)
-#define XMODEM_UART_PIN_TX_ID (QM_PIN_ID_18)
-#define XMODEM_UART_PIN_TX_FN (QM_PMUX_FN_0)
-#define XMODEM_UART_PIN_RX_ID (QM_PIN_ID_19)
-#define XMODEM_UART_PIN_RX_FN (QM_PMUX_FN_0)
-#define XMODEM_UART_CLK (CLK_PERIPH_UARTA_REGISTER)
-/*
- * Using a function-looking macro since qm_irq_request() is actually a macro
- * stringifying its first argument
- */
-#define xmodem_uart_enable_irq() qm_irq_request(QM_IRQ_UART_0, qm_uart_0_isr)
-#elif(XMODEM_UART == 1)
-#define XMODEM_UART_PIN_TX_ID (QM_PIN_ID_16)
-#define XMODEM_UART_PIN_TX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_PIN_RX_ID (QM_PIN_ID_17)
-#define XMODEM_UART_PIN_RX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_IRQ (QM_IRQ_UART_1)
-#define XMODEM_UART_CLK (CLK_PERIPH_UARTB_REGISTER)
-#define xmodem_uart_enable_irq() qm_irq_request(QM_IRQ_UART_1, qm_uart_1_isr)
-#else
-#error "Invalid UART ID for XMODEM"
-#endif /* XMODEM_UART */
-#elif(QUARK_D2000)
-#if (XMODEM_UART == 0)
-#define XMODEM_UART_PIN_TX_ID (QM_PIN_ID_12)
-#define XMODEM_UART_PIN_TX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_PIN_RX_ID (QM_PIN_ID_13)
-#define XMODEM_UART_PIN_RX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_CLK (CLK_PERIPH_UARTA_REGISTER)
-#define xmodem_uart_enable_irq() qm_irq_request(QM_IRQ_UART_0, qm_uart_0_isr)
-#elif(XMODEM_UART == 1)
-#define XMODEM_UART_PIN_TX_ID (QM_PIN_ID_20)
-#define XMODEM_UART_PIN_TX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_PIN_RX_ID (QM_PIN_ID_21)
-#define XMODEM_UART_PIN_RX_FN (QM_PMUX_FN_2)
-#define XMODEM_UART_IRQ (QM_IRQ_UART_1)
-#define XMODEM_UART_CLK (CLK_PERIPH_UARTB_REGISTER)
-#define xmodem_uart_enable_irq() qm_irq_request(QM_IRQ_UART_1, qm_uart_1_isr)
-#else
-#error "Invalid UART ID for XMODEM"
-#endif /* XMODEM_UART */
-#else
-#error "SOC not supported"
-#endif
+#define XMODEM_UART_TIMEOUT_S (2)
 
 /*-------------------------------------------------------------------------*/
 /*                          FORWARD DECLARATIONS                           */
@@ -108,7 +57,7 @@ static uint8_t in_byte;
 
 /** The XMODEM UART configuration. */
 static const qm_uart_config_t uart_config = {
-    .baud_divisor = XMODEM_UART_DIVISOR,
+    .baud_divisor = DM_CONFIG_UART_BAUD_DIV,
     .line_control = QM_UART_LC_8N1,
     .hw_fc = false,
 };
@@ -163,13 +112,12 @@ static void rtc_callback(void *data)
 /* Send one byte */
 int xmodem_io_putc(const uint8_t *ch)
 {
-	return qm_uart_write(XMODEM_UART, *ch);
+	return qm_uart_write(DM_CONFIG_UART, *ch);
 }
 
 /* Receive one byte */
 int xmodem_io_getc(uint8_t *ch)
 {
-	int status;
 	enum rx_state retv;
 
 	/* Set up timeout timer */
@@ -178,26 +126,28 @@ int xmodem_io_getc(uint8_t *ch)
 
 	/* Reseting the state and read byte */
 	xmodem_io_rx_state = STATE_WAITING;
-	status = qm_uart_irq_read(XMODEM_UART, &uart_transfer);
-	if (status != 0) {
-		return STATE_UART_ERROR;
-	}
+	qm_uart_irq_read(DM_CONFIG_UART, &uart_transfer);
+
+	/* Wait for UART interruption or RTC timeout callback */
 	while (retv = xmodem_io_rx_state, retv == STATE_WAITING) {
 		; /* Busy wait until one of the callbacks is called */
 	}
 	switch (retv) {
 	case STATE_TIMEOUT:
-		qm_uart_irq_read_terminate(XMODEM_UART);
+		qm_uart_irq_read_terminate(DM_CONFIG_UART);
 		break;
 	case STATE_UART_RX_DONE:
 		/* Got byte */
 		*ch = in_byte;
 		break;
-	case STATE_UART_ERROR:
-	case STATE_WAITING:
-		/* Impossible case, included anyway for completeness */
+	default:
+		/**
+		 * Handle STATE_UART_ERROR case which can happen on UART read
+		 * error, and STATE_WAITING which is an impossible case
+		 */
 		break;
 	}
+
 	/* Disable timer alarm */
 	rtc_cfg.alarm_en = false;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
@@ -211,17 +161,19 @@ int xmodem_io_getc(uint8_t *ch)
 void xmodem_io_uart_init()
 {
 	/* Pinmux for UART_x */
-	qm_pmux_select(XMODEM_UART_PIN_TX_ID, XMODEM_UART_PIN_TX_FN);
-	qm_pmux_select(XMODEM_UART_PIN_RX_ID, XMODEM_UART_PIN_RX_FN);
-	qm_pmux_input_en(XMODEM_UART_PIN_RX_ID, true);
+	qm_pmux_select(DM_COMM_UART_PIN_TX_ID, DM_COMM_UART_PIN_TX_FN);
+	qm_pmux_select(DM_COMM_UART_PIN_RX_ID, DM_COMM_UART_PIN_RX_FN);
+	qm_pmux_input_en(DM_COMM_UART_PIN_RX_ID, true);
 
 	/* Enable UART and RTC clocks */
-	clk_periph_enable(XMODEM_UART_CLK | CLK_PERIPH_RTC_REGISTER |
+	clk_periph_enable(DM_COMM_UART_CLK | CLK_PERIPH_RTC_REGISTER |
 			  CLK_PERIPH_CLK);
 
 	/* Setup UART */
-	qm_uart_set_config(XMODEM_UART, &uart_config);
-	xmodem_uart_enable_irq();
+	qm_uart_set_config(DM_CONFIG_UART, &uart_config);
+
+	/* Request IRQ for UART */
+	dm_comm_irq_request();
 
 	/* Set up timeout timer (RTC) */
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);

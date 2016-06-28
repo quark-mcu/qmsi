@@ -41,7 +41,7 @@ outputFilename = sys.argv[2]
 imageFile = open(outputFilename, 'wb+')
 romCodeFile = open(romCodeFilename, 'rb').read()
 imageLen = 0x2000  # ROM size for Quark SE SOC is 8 KB (0x2000)
-dataAreaLen = 0x400  # We reserve 1 KB for the OTP word and data storage
+dataAreaLen = 0x200  # We reserve 512 bytes for the OTP word and data storage
 offset = 0
 
 # Pad data area with 0xFF

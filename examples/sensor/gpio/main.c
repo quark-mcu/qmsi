@@ -64,18 +64,19 @@ int main(void)
 	QM_PUTS("Starting: SS GPIO\n");
 
 	/* Set GPIO mux mode. */
-	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_11, QM_PMUX_FN_0);
+	qm_pmux_pullup_en(PIN_INTR, true);
+	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
+	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
 
 	/* Enable input on PIN_INTR. */
-	qm_pmux_input_en(QM_PIN_ID_11, true);
+	qm_pmux_input_en(PIN_INTR, true);
 
 	/* Request IRQ and write SS GPIO port config. */
 	conf.direction = BIT(PIN_OUT);
-	conf.int_en = BIT(PIN_INTR);       /* Interrupt enabled. */
-	conf.int_type = BIT(PIN_INTR);     /* Edge sensitive interrupt. */
-	conf.int_polarity = BIT(PIN_INTR); /* Rising edge. */
-	conf.int_debounce = BIT(PIN_INTR); /* Debounce enabled. */
+	conf.int_en = BIT(PIN_INTR);	/* Interrupt enabled. */
+	conf.int_type = BIT(PIN_INTR);      /* Edge sensitive interrupt. */
+	conf.int_polarity = ~BIT(PIN_INTR); /* Falling edge. */
+	conf.int_debounce = BIT(PIN_INTR);  /* Debounce enabled. */
 	conf.callback = gpio_example_callback;
 	conf.callback_data = NULL;
 
@@ -85,9 +86,9 @@ int main(void)
 
 	qm_ss_gpio_set_config(QM_SS_GPIO_0, &conf);
 
-	/* Set PIN_OUT to trigger PIN_INTR interrupt */
-	qm_ss_gpio_clear_pin(QM_SS_GPIO_0, PIN_OUT);
+	/* Clear PIN_OUT to trigger PIN_INTR interrupt. */
 	qm_ss_gpio_set_pin(QM_SS_GPIO_0, PIN_OUT);
+	qm_ss_gpio_clear_pin(QM_SS_GPIO_0, PIN_OUT);
 
 	while (!callback_invoked) {
 	}
@@ -96,11 +97,11 @@ int main(void)
 		QM_PUTS("Error: read pin failed\n");
 		return -EIO;
 	}
-	if (state != QM_SS_GPIO_HIGH) {
+	if (state != QM_SS_GPIO_LOW) {
 		QM_PUTS("Error: SS GPIO pin out comparison failed\n");
 		return -EIO;
 	}
-	qm_ss_gpio_clear_pin(QM_SS_GPIO_0, PIN_OUT);
+
 	QM_PUTS("Finished: SS GPIO\n");
 	return 0;
 }

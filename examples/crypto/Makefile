@@ -36,6 +36,10 @@ TARGET ?= x86
 BASE_DIR := ../..
 APP_DIR := .
 
+ifeq ($(TARGET), sensor)
+$(error Supported TARGET values are 'x86')
+endif
+
 ### Make includes
 include $(BASE_DIR)/base.mk
 
@@ -50,15 +54,16 @@ endif
 $(info TINYCRYPT_SRC_DIR = $(TINYCRYPT_SRC_DIR))
 
 ### Variables
-CRYPT_LIB_DIR = $(TINYCRYPT_SRC_DIR)/lib
-LMT_SOURCES = $(wildcard $(CRYPT_LIB_DIR)/*.c)
+CRYPT_LIB_SRC_DIR = $(TINYCRYPT_SRC_DIR)/lib/source
+CRYPT_LIB_INC_DIR = $(TINYCRYPT_SRC_DIR)/lib/include
+LMT_SOURCES = $(wildcard $(CRYPT_LIB_SRC_DIR)/*.c)
 OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(LMT_SOURCES:.c=.o)))
 
 ### Flags
-CFLAGS += -I$(CRYPT_LIB_DIR)
+CFLAGS += -I$(CRYPT_LIB_INC_DIR)
 
 ### Build C files
-$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(CRYPT_LIB_DIR)/%.c
+$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(CRYPT_LIB_SRC_DIR)/%.c
 	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<
 

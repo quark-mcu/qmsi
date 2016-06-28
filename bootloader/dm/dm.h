@@ -60,7 +60,7 @@
  * DM main loop. This function never returns; indeed, DM mode is exited through
  * a reset.
  */
-void __attribute__((__noreturn__)) dm_main(void);
+void dm_main(void);
 
 /**
  * Setup the Device Management hook.

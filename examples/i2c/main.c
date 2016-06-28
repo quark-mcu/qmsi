@@ -59,20 +59,29 @@
  */
 
 void eeprom_compare_page(uint8_t *write_data, uint8_t *read_data);
-static void i2c_0_cb(void *data, int rc, qm_i2c_status_t status,
-		     uint32_t len);
+static void i2c_0_cb(void *data, int rc, qm_i2c_status_t status, uint32_t len);
+
+static void i2c_user_dma_write_callback(void *data, int error_code,
+					qm_i2c_status_t status, uint32_t len);
+static void i2c_user_dma_combined_trans_callback(void *data, int error_code,
+						 qm_i2c_status_t status,
+						 uint32_t len);
+
+/* Request data for I2C asynchronous operation (transfer descriptor) needs to
+ * be kept alive during request processing. It is safer when it is globally
+ * accessible within the file - we are sure then that they will be always in the
+ * scope when IRQ will be triggered*/
+static qm_i2c_transfer_t async_dma_write_xfer;
+static qm_i2c_transfer_t async_dma_combined_xfer;
+static qm_i2c_transfer_t async_irq_write_xfer;
+static qm_i2c_transfer_t async_irq_read_xfer;
+
+volatile bool dma_write_done = false;
+volatile bool dma_read_done = false;
 
 volatile bool i2c_0_complete = false;
 static uint8_t id_write = 0;
 static uint8_t id_read = 1;
-
-static void i2c_user_dma_write_callback(void *data, int error_code,
-	qm_i2c_status_t status, uint32_t len);
-static void i2c_user_dma_combined_trans_callback(void *data, int error_code,
-	qm_i2c_status_t status, uint32_t len);
-
-volatile bool dma_write_done = false;
-volatile bool dma_read_done = false;
 
 /* Reserve two bytes for eeprom address */
 uint8_t eeprom_pio_write_data[EEPROM_PAGE_SIZE_BYTES + EEPROM_ADDR_SIZE_BYTES] =
@@ -87,38 +96,34 @@ uint8_t eeprom_pio_read_buf[EEPROM_PAGE_SIZE_BYTES + NULL_TERMINATOR];
 /**
  * Configures the DMA TX channel and starts a TX transfer.
  */
-void i2c_dma_write_example ()
+void i2c_dma_write_example()
 {
-	qm_i2c_transfer_t i2c_transfer_parameters;
-
 	QM_PUTS("\nI2C DMA TX\n");
 
 	/* Set the ongoing TX flag */
 	dma_write_done = false;
 
 	/* Config the transfer */
-	i2c_transfer_parameters.tx = eeprom_pio_write_data;
-	i2c_transfer_parameters.tx_len = EEPROM_PAGE_SIZE_BYTES +
-		EEPROM_ADDR_SIZE_BYTES;
-	i2c_transfer_parameters.rx = NULL;
-	i2c_transfer_parameters.rx_len = 0;
-	i2c_transfer_parameters.callback = i2c_user_dma_write_callback;
-	i2c_transfer_parameters.callback_data = NULL;
-	i2c_transfer_parameters.stop = true;
+	async_dma_write_xfer.tx = eeprom_pio_write_data;
+	async_dma_write_xfer.tx_len =
+	    EEPROM_PAGE_SIZE_BYTES + EEPROM_ADDR_SIZE_BYTES;
+	async_dma_write_xfer.rx = NULL;
+	async_dma_write_xfer.rx_len = 0;
+	async_dma_write_xfer.callback = i2c_user_dma_write_callback;
+	async_dma_write_xfer.callback_data = NULL;
+	async_dma_write_xfer.stop = true;
 
 	/* Start TX */
-	qm_i2c_master_dma_transfer(QM_I2C_0, &i2c_transfer_parameters,
-		EEPROM_SLAVE_ADDR);
+	qm_i2c_master_dma_transfer(QM_I2C_0, &async_dma_write_xfer,
+				   EEPROM_SLAVE_ADDR);
 }
 
 /**
  * Waits for the previos DMA TX transfer to finish and starts a combined
  * transaction using the 2 channels previously configured.
  */
-void i2c_dma_combined_transaction_example ()
+void i2c_dma_combined_transaction_example()
 {
-	qm_i2c_transfer_t i2c_transfer_parameters;
-
 	QM_PUTS("\nI2C DMA Combined transaction\n");
 
 	/* Set the ongoing TX and RX flags */
@@ -126,24 +131,22 @@ void i2c_dma_combined_transaction_example ()
 	dma_write_done = false;
 
 	/* Config the transfer */
-	i2c_transfer_parameters.tx = eeprom_read_addr;
-	i2c_transfer_parameters.tx_len = EEPROM_ADDR_SIZE_BYTES;
-	i2c_transfer_parameters.rx = eeprom_irq_read_buf;
-	i2c_transfer_parameters.rx_len = EEPROM_PAGE_SIZE_BYTES;
-	i2c_transfer_parameters.callback = i2c_user_dma_combined_trans_callback;
-	i2c_transfer_parameters.callback_data = NULL;
-	i2c_transfer_parameters.stop = true;
+	async_dma_combined_xfer.tx = eeprom_read_addr;
+	async_dma_combined_xfer.tx_len = EEPROM_ADDR_SIZE_BYTES;
+	async_dma_combined_xfer.rx = eeprom_irq_read_buf;
+	async_dma_combined_xfer.rx_len = EEPROM_PAGE_SIZE_BYTES;
+	async_dma_combined_xfer.callback = i2c_user_dma_combined_trans_callback;
+	async_dma_combined_xfer.callback_data = NULL;
+	async_dma_combined_xfer.stop = true;
 
-	qm_i2c_master_dma_transfer(QM_I2C_0, &i2c_transfer_parameters,
-		EEPROM_SLAVE_ADDR);
+	qm_i2c_master_dma_transfer(QM_I2C_0, &async_dma_combined_xfer,
+				   EEPROM_SLAVE_ADDR);
 }
-
 
 int main(void)
 {
 	/*  Variables */
 	qm_i2c_config_t cfg;
-	qm_i2c_transfer_t xfer_write, xfer_read;
 	qm_i2c_status_t status;
 	uint32_t rc;
 
@@ -206,15 +209,15 @@ int main(void)
 	eeprom_compare_page(eeprom_pio_write_data, eeprom_pio_read_buf);
 
 	QM_PUTS("IRQ write\n");
-	xfer_write.tx = eeprom_irq_write_data;
-	xfer_write.tx_len = EEPROM_PAGE_SIZE_BYTES + EEPROM_ADDR_SIZE_BYTES;
-	xfer_write.callback = i2c_0_cb;
-	xfer_write.callback_data = &id_write;
-	xfer_write.rx = NULL;
-	xfer_write.rx_len = 0;
-	xfer_write.stop = true;
+	async_irq_write_xfer.tx = eeprom_irq_write_data;
+	async_irq_write_xfer.tx_len = EEPROM_PAGE_SIZE_BYTES + EEPROM_ADDR_SIZE_BYTES;
+	async_irq_write_xfer.callback = i2c_0_cb;
+	async_irq_write_xfer.callback_data = &id_write;
+	async_irq_write_xfer.rx = NULL;
+	async_irq_write_xfer.rx_len = 0;
+	async_irq_write_xfer.stop = true;
 
-	if (qm_i2c_master_irq_transfer(QM_I2C_0, &xfer_write,
+	if (qm_i2c_master_irq_transfer(QM_I2C_0, &async_irq_write_xfer,
 				       EEPROM_SLAVE_ADDR)) {
 		QM_PUTS("Error: IRQ write\n");
 	}
@@ -224,16 +227,16 @@ int main(void)
 	clk_sys_udelay(EEPROM_WRITE_WAIT_TIME_US);
 
 	QM_PUTS("IRQ combined write + read\n");
-	xfer_read.tx = eeprom_read_addr;
-	xfer_read.tx_len = EEPROM_ADDR_SIZE_BYTES;
-	xfer_read.callback = i2c_0_cb;
-	xfer_read.callback_data = &id_read;
-	xfer_read.rx = eeprom_irq_read_buf;
-	xfer_read.rx_len = EEPROM_PAGE_SIZE_BYTES;
-	xfer_read.stop = true;
+	async_irq_read_xfer.tx = eeprom_read_addr;
+	async_irq_read_xfer.tx_len = EEPROM_ADDR_SIZE_BYTES;
+	async_irq_read_xfer.callback = i2c_0_cb;
+	async_irq_read_xfer.callback_data = &id_read;
+	async_irq_read_xfer.rx = eeprom_irq_read_buf;
+	async_irq_read_xfer.rx_len = EEPROM_PAGE_SIZE_BYTES;
+	async_irq_read_xfer.stop = true;
 
 	i2c_0_complete = false;
-	if (qm_i2c_master_irq_transfer(QM_I2C_0, &xfer_read,
+	if (qm_i2c_master_irq_transfer(QM_I2C_0, &async_irq_read_xfer,
 				       EEPROM_SLAVE_ADDR)) {
 		QM_PUTS("Error: IRQ read\n");
 	}
@@ -256,28 +259,30 @@ int main(void)
 	}
 
 	/* Configure the TX channel */
-	rc = qm_i2c_dma_channel_config(QM_I2C_0, QM_DMA_0,
-		I2C_DMA_TX_CHANNEL_ID, QM_DMA_MEMORY_TO_PERIPHERAL);
+	rc =
+	    qm_i2c_dma_channel_config(QM_I2C_0, QM_DMA_0, I2C_DMA_TX_CHANNEL_ID,
+				      QM_DMA_MEMORY_TO_PERIPHERAL);
 	if (rc != 0) {
 		QM_PUTS("ERROR: TX channel configuring failed\n");
 	}
 
 	/* Configure the RX channel */
-	rc = qm_i2c_dma_channel_config(QM_I2C_0, QM_DMA_0,
-		I2C_DMA_RX_CHANNEL_ID, QM_DMA_PERIPHERAL_TO_MEMORY);
+	rc =
+	    qm_i2c_dma_channel_config(QM_I2C_0, QM_DMA_0, I2C_DMA_RX_CHANNEL_ID,
+				      QM_DMA_PERIPHERAL_TO_MEMORY);
 	if (rc != 0) {
 		QM_PUTS("ERROR: Channel config failed\n");
 	}
 
 	/* DMA write operation */
-	i2c_dma_write_example ();
+	i2c_dma_write_example();
 
 	/* Wait for the operation to finish */
 	while (!dma_write_done) {
 	}
 
 	/* DMA combined transaction */
-	i2c_dma_combined_transaction_example ();
+	i2c_dma_combined_transaction_example();
 
 	/* Wait for the operation to finish */
 	while ((!dma_write_done) || (!dma_read_done)) {
@@ -317,20 +322,21 @@ static void i2c_user_dma_error_callback()
 }
 
 static void i2c_user_dma_write_callback(void *data, int error_code,
-	qm_i2c_status_t status, uint32_t len)
+					qm_i2c_status_t status, uint32_t len)
 {
 	if (error_code != 0) {
-		i2c_user_dma_error_callback ();
+		i2c_user_dma_error_callback();
 	}
 	QM_PUTS("\nI2C DMA TX Transfer complete\n");
 	dma_write_done = true;
 }
 
 static void i2c_user_dma_combined_trans_callback(void *data, int error_code,
-	qm_i2c_status_t status, uint32_t len)
+						 qm_i2c_status_t status,
+						 uint32_t len)
 {
 	if (error_code != 0) {
-		i2c_user_dma_error_callback ();
+		i2c_user_dma_error_callback();
 	}
 	QM_PUTS("\nI2C DMA RX Transfer complete\n");
 	eeprom_compare_page(eeprom_pio_write_data, eeprom_irq_read_buf);

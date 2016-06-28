@@ -27,14 +27,20 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-BOOT_SOURCES = $(wildcard $(BOOT_DIR)/clk/*.c)
-OBJ_DIRS += $(BOOT_DIR)/clk/$(BUILD)/$(SOC)/$(OBJ)
-GENERATED_DIRS += $(BOOT_DIR)/clk/$(BUILD)
 
-CFLAGS += -I$(BASE_DIR)/drivers
-CFLAGS += -I$(BOOT_DIR)/clk
+### Make all examples makefile
+SUBDIRS := $(filter %/, $(wildcard ./*/))
 
-### Build C files
-$(BOOT_DIR)/clk/$(BUILD)/$(SOC)/$(OBJ)/%.o: $(BOOT_DIR)/clk/%.c libqmsi
-	$(call mkdir, $(BOOT_DIR)/clk/$(BUILD)/$(SOC)/$(OBJ))
-	$(CC) $(CFLAGS) -c -o $@ $<
+ifeq ($(SOC), quark_se)
+ifeq ($(TARGET), x86)
+#### Excluding the non supported modules
+SUBDIRS := $(subst ./electricity_sensor/,,${SUBDIRS})
+endif
+endif
+
+all clean realclean:: $(SUBDIRS)
+
+$(SUBDIRS):
+	$(MAKE) SOC=$(SOC) TARGET=$(TARGET) BUILD=$(BUILD) -C $@ $(MAKECMDGOALS)
+
+.PHONY: $(SUBDIRS)

@@ -64,12 +64,23 @@ $(info APP_DIR = $(APP_DIR))
 
 ### Variables
 APP = $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(BIN)/$(APP_NAME).bin
+QFU = $(APP).dfu
 OBJ_DIRS += $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)
 GENERATED_DIRS += $(APP_DIR)/$(BUILD)
 SOURCES = $(wildcard $(APP_DIR)/*.c)
 OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(SOURCES:.c=.o)))
 CFLAGS += -DPRINTF_ENABLE -DPUTS_ENABLE
 CFLAGS += -Wno-unused-parameter
+
+QFU_GEN_0 = python $(BASE_DIR)/tools/sysupdate/qm_make_dfu.py
+QFU_GEN_1 = $(QFU_GEN_0) -v
+QFU_GEN = $(QFU_GEN_$(V))
+
+ifeq ($(TARGET), sensor)
+QFU_PARTITION = 2
+else
+QFU_PARTITION = 1
+endif
 
 ### Mount Atlas and Atlas Hills are capable of
 ### routing UART_1 to a dual FTDI JTAG/UART chip.
@@ -102,3 +113,14 @@ $(APP): $(LINKER_FILE) $(OBJECTS) libqmsi
 		-Xlinker --start-group $(LDLIBS) -Xlinker --end-group
 	$(SIZE) $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/$(APP_NAME).elf
 	$(OBJCOPY) -O binary $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/$(APP_NAME).elf $@
+
+$(QFU): $(APP)
+	$(QFU_GEN) $(APP) -p $(QFU_PARTITION)
+
+qfu: $(QFU)
+
+flash: $(QFU)
+ifeq ($(SERIAL_PORT), )
+	$(error Target flash requires SERIAL_PORT to be set)
+endif
+	dfu-util-qda -D $(QFU) -p $(SERIAL_PORT) -R -a $(QFU_PARTITION)

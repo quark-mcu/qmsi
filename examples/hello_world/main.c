@@ -27,8 +27,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <qm_common.h>
-#include <qm_uart.h>
+#include "qm_common.h"
 
 /* Hello world example app */
 int main(void)

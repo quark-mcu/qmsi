@@ -54,10 +54,10 @@ CAT = $(CAT_$(V))
 all: html pdf
 
 html:
-
 	$(DOXYFILE)
 	$(CAT)
-
+	mkdir -p ../html
+	cp html/* ../html/
 pdf:
 	$(DOXYLATEX)
 	$(CAT)

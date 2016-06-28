@@ -108,8 +108,7 @@ int main(void)
 	 * location inside the page
 	 */
 	page_num = ((app_end - flash_base) / QM_FLASH_PAGE_SIZE_BYTES) + 1;
-	wr_flash_addr =
-	    (QM_FLASH_PAGE_SIZE_BYTES * page_num) + WR_PAGE_OFFSET;
+	wr_flash_addr = (QM_FLASH_PAGE_SIZE_BYTES * page_num) + WR_PAGE_OFFSET;
 
 	cfg_wr.us_count = US_COUNT;
 	cfg_wr.wait_states = WAIT_STATES;

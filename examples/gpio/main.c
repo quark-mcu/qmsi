@@ -30,6 +30,7 @@
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
 #include "qm_isr.h"
+#include "qm_pinmux.h"
 
 #include <inttypes.h>
 
@@ -61,24 +62,33 @@ int main(void)
 
 	QM_PUTS("Starting: GPIO\n");
 
+	/* Pin Muxing */
+	qm_pmux_pullup_en(PIN_INTR, true);
+	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
+	qm_pmux_input_en(PIN_INTR, true);
+	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
+
 	/* Request IRQ and write GPIO port config */
 	cfg.direction = BIT(PIN_OUT);
-	cfg.int_en = BIT(PIN_INTR);       /* Interrupt enabled */
-	cfg.int_type = BIT(PIN_INTR);     /* Edge sensitive interrupt */
-	cfg.int_polarity = BIT(PIN_INTR); /* Rising edge */
-	cfg.int_debounce = BIT(PIN_INTR); /* Debounce enabled */
-	cfg.int_bothedge = 0x0;		  /* Both edge disabled */
+	cfg.int_en = BIT(PIN_INTR);	/* Interrupt enabled */
+	cfg.int_type = BIT(PIN_INTR);      /* Edge sensitive interrupt */
+	cfg.int_polarity = ~BIT(PIN_INTR); /* Falling edge */
+	cfg.int_debounce = BIT(PIN_INTR);  /* Debounce enabled */
+	cfg.int_bothedge = 0x0;		   /* Both edge disabled */
 	cfg.callback = gpio_example_callback;
 	cfg.callback_data = NULL;
 	callback_invoked = false;
 
 	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
 
+	/* enable pullup on interrupt pin. */
+	qm_pmux_pullup_en(PIN_INTR, true);
+
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 
-	/* Set PIN_OUT to trigger PIN_INTR interrupt */
-	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
+	/* Clear PIN_OUT to trigger PIN_INTR interrupt */
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
+	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 
 	while (!callback_invoked) {
 	}
@@ -87,11 +97,11 @@ int main(void)
 		QM_PUTS("Error: read pin failed\n");
 		return -EIO;
 	}
-	if (state != QM_GPIO_HIGH) {
+	if (state != QM_GPIO_LOW) {
 		QM_PUTS("Error: pin comparison failed\n");
 		return -EIO;
 	}
-	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
+
 	QM_PUTS("Finished: GPIO\n");
 	return 0;
 }

@@ -64,7 +64,7 @@ int main(void)
 	uint32_t app_end;
 	uint32_t address;
 	uint8_t low_bound;
-	qm_fpr_config_t cfg;
+	qm_fpr_config_t cfg = {0};
 
 #if (QUARK_D2000)
 	flash_base = QM_FLASH_REGION_SYS_0_BASE;

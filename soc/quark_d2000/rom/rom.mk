@@ -36,13 +36,14 @@ GENERATED_DIRS += $(ROM_DIR)/$(BUILD)
 STARTUP = $(ROM_DIR)/$(BUILD)/$(OBJ)/rom_startup.bin
 STARTUP_OBJS = $(ROM_DIR)/$(BUILD)/$(OBJ)/rom_startup.s.o \
               $(ROM_DIR)/$(BUILD)/$(OBJ)/rom_startup.o
-BOOT_OBJS = $(BOOT_DIR)/clk/$(BUILD)/$(SOC)/$(OBJ)/boot_clk.o
+BOOT_OBJS = $(BOOT_DIR)/boot/$(BUILD)/$(SOC)/$(OBJ)/boot_clk.o
+BOOT_OBJS += $(BOOT_DIR)/boot/$(BUILD)/$(SOC)/$(OBJ)/boot.o
 
 ROM = $(ROM_BUILD_DIR)/quark_d2000_rom.bin
 ROM_LINKER_FILE ?= $(ROM_DIR)/rom.ld
 
 CFLAGS += -I$(BASE_DIR)/drivers
-CFLAGS += -I$(BASE_DIR)/bootloader/clk
+CFLAGS += -I$(BASE_DIR)/bootloader/boot
 
 ### For ROM we always manage our own ISRs.
 CFLAGS += -UISR_HANDLED
@@ -54,6 +55,10 @@ STARTUP_OBJS += $(DM_OBJS)
 # NOTE: '-Wno-unused-parameter' added to make DM module compile; to be removed
 # once the root cause is fixed
 CFLAGS += -Wno-unused-parameter -DSYSTEM_UPDATE_ENABLE=1
+endif
+
+ifneq ($(RTOS),)
+$(error Should not specify RTOS for ROM builds)
 endif
 
 .PHONY: rom
@@ -73,7 +78,7 @@ $(STARTUP): $(STARTUP_OBJS) $(BOOT_OBJS) libqmsi
 		-Xlinker -Map=$(STARTUP).map \
 		-o $(STARTUP).elf $(STARTUP_OBJS) $(BOOT_OBJS) $(LDLIBS)
 	$(SIZE) $(STARTUP).elf
-	$(OBJCOPY) -O binary $(STARTUP).elf $@
+	$(OBJCOPY) --gap-fill 0xFF -O binary $(STARTUP).elf $@
 
 ### Build C files
 $(ROM_DIR)/$(BUILD)/$(OBJ)/%.o: $(ROM_DIR)/%.c $(BOOT_OBJS) libqmsi

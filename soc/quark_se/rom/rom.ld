@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -13,7 +13,7 @@
  * 3. Neither the name of the Intel Corporation nor the names of its
  *    contributors may be used to endorse or promote products derived from this
  *    software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,10 +31,11 @@ ENTRY(_start)
 
 MEMORY
 {
+	otp_lock (rw)   : ORIGIN = 0xFFFFE000, LENGTH = 0x4
 	/* ROM manufacturing data */
-	rom_data (rw)   : ORIGIN = 0xFFFFE000, LENGTH = 1K
-	/* ROM: 8K - ROM version - reset vector - manufacturing data */
-	rom (rw)	: ORIGIN = 0xFFFFE400, LENGTH = 8K - 0x4 - 16 - 1K
+	rom_data (rw)   : ORIGIN = 0xFFFFE004, LENGTH = 0x1FC
+	/* ROM: 8K - ROM version - reset vector - manufacturing data - OTP lock */
+	rom (rw)	: ORIGIN = 0xFFFFE200, LENGTH = 8K - 0x4 - 16 - 0x1FC - 0x4
 	/* ROM version */
 	rom_ver (r)	: ORIGIN = 0xFFFFFFEC, LENGTH = 0x4
 	reset_vector (r): ORIGIN = 0xFFFFFFF0, LENGTH = 16
@@ -45,8 +46,7 @@ MEMORY
 	/* ESRAM: half RAM size - stack - IDT */
 	esram (rw)	: ORIGIN = 0xA800A220, LENGTH = 40K - 1K - 0x220
 	/* Stack */
-	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K - 0x4
-	esram_lock (rw)	: ORIGIN = 0xA8013FFC, LENGTH = 0x4
+	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K
 }
 
 /* Sensor Subsystem reset vector definition */
@@ -58,9 +58,6 @@ __stack_start = ORIGIN(stack) + LENGTH(stack);
 /* IDT definition */
 __idt_start = ORIGIN(esram_idt);
 __idt_end = __idt_start + LENGTH(esram_idt);
-
-__esram_lock_start = ORIGIN(esram_lock);
-__esram_lock_end = __esram_lock_start + LENGTH(esram_lock);
 
 SECTIONS
 {
@@ -96,13 +93,6 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 	} >esram  AT>esram
-
-	.fill :
-	{
-		FILL(0xFF);
-		. = ORIGIN(rom) + LENGTH(rom) - 1;
-		BYTE(0xFF);
-	} > rom
 
 	. = ORIGIN(rom_ver);
 	.rom_version :

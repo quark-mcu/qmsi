@@ -105,9 +105,9 @@ int main(void)
 	eeprom_irq_write_data[1] = EEPROM_ADDR_FIRST_PAGE_HI;
 
 	QM_PUTS("PIO write");
-	if (qm_ss_i2c_master_write(QM_SS_I2C_0, EEPROM_SLAVE_ADDR,
-				   eeprom_pio_write_data,
-				   sizeof(eeprom_pio_write_data), true, &status)) {
+	if (qm_ss_i2c_master_write(
+		QM_SS_I2C_0, EEPROM_SLAVE_ADDR, eeprom_pio_write_data,
+		sizeof(eeprom_pio_write_data), true, &status)) {
 		QM_PUTS("Error: PIO write");
 	} else {
 
@@ -195,7 +195,8 @@ void eeprom_compare_page(uint8_t *write_data, uint8_t *read_data)
 	QM_PUTS((const char *)read_data);
 }
 
-static void i2c_0_cb(void *data, int rc, qm_ss_i2c_status_t status, uint32_t len)
+static void i2c_0_cb(void *data, int rc, qm_ss_i2c_status_t status,
+		     uint32_t len)
 {
 	QM_PUTS("SS I2C IRQ Transfer complete");
 	i2c_0_complete = true;

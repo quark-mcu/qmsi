@@ -31,11 +31,11 @@
 ### Variables
 APP_NAME = mailbox
 
+SOC ?= quark_se
 ifneq ($(SOC),quark_se)
 $(error Supported SOC values is 'quark_se')
 endif
 
-SOC ?= quark_se
 TARGET ?= x86
 BASE_DIR := ../..
 APP_DIR := .

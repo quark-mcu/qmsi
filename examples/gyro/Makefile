@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### Accelerometer example makefile
+### Gyro example makefile
 
 ### Variables
 APP_NAME = gyro
@@ -35,16 +35,6 @@ SOC ?= quark_se
 TARGET ?= sensor
 BASE_DIR := ../..
 APP_DIR := .
-
-ifeq ($(IPP_LIBRARY_PATH),)
-$(info If you want to use the IPP library for RMS, Average and Mean)
-$(info calculations, please run:)
-$(info export IPP_LIBRARY_PATH=<Path to the IPP library>)
-$(info Continuing.)
-else
-CFLAGS += -I$(IPP_LIBRARY_PATH)/include -D__IPP_ENABLED__=1
-LDLIBS += -L$(IPP_LIBRARY_PATH)/lib -lippsq
-endif
 
 PERIPH += bmx1xx
 

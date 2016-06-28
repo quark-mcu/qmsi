@@ -38,6 +38,15 @@
 	.section .text.entry
 	.align 4
 	.global _reset
+
+/**
+ * Make the first four bytes of the Sensor Subsystem flash partition point to
+ * the Sensor Subsystem _reset entry point.
+ * The Lakemont bootloader fetches this pointer and places it in the Sensor
+ * Subsystem reset vector before taking the Sensor Subsystem core out of reset.
+ */
+.word 0x40000004
+
 .func _reset
 _reset:
 	/* Invalidate I-Cache */

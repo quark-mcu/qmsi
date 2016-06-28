@@ -27,13 +27,15 @@ Hardware Compatibility
 This release has been validated with the following hardware:
 
 * Intel® Quark™ Microcontroller SE Series.
+* Intel® Quark™ Microcontroller SE Development Platform.
 * Intel® Quark™ Microcontroller D2000 Series.
 * Intel® Quark™ Microcontroller D2000 Development Platform.
 
 External Dependencies
 *********************
 
-* The IAMCU toolchain (i586-intel-elfiamcu) is required to build the source code.
+* The ISSM toolchain is required to build the source code. It provides both the
+IAMCU and the ARCMCU toolchains (i586-intel-elfiamcu and arc-elf32, respectively).
 * OpenOCD is required to flash applications and ROM files onto the SoC.
 * GDB is optional, it is used as a supplement to OpenOCD for debugging.
 * `Intel® System Studio for Microcontrollers <https://software.intel.com/en-us/intel-system-studio-microcontrollers>`_ is optional.
@@ -51,14 +53,19 @@ Organization
 
 	.
 	├── board           : Board level drivers
-	├── doc             : Doxygen documentation
+	├── bootloader      : QMSI Bootloader
+	│   ├── boot        : Common Bootstrap code
+	│   └── dm          : Device Management
+	├── doc             : Project documentation and Guidelines
+	│   └── api         : Doxygen documentation
 	├── drivers         : Intel® SoC drivers
 	│   └── include     : QMSI driver headers
+	│   └── sensor      : Quark SE Sensor Subsystem drivers
 	├── examples        : Examples using the QMSI API
 	├── include         : Top level headers
-	├── SoC             : Intel® SoCs support
+	├── soc             : Intel® MCUs SoCs support
 	│   ├── quark_d2000 : Intel® Quark™ Microcontroller D2000 support
-	│   └── quark_se    : Intel® Quark™ SE SoC early support
+	│   └── quark_se    : Intel® Quark™ SE SoC support
 	└─ sys              : Application entry and Newlib syscalls
 
 

@@ -27,16 +27,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### POWER SOC example makefile
+### Grove digital gyro sensor ITG-3200 example makefile
 
 ### Variables
-APP_NAME = power_soc
-SOC ?= quark_se
-TARGET ?= sensor
-BASE_DIR := ../../..
+APP_NAME = grove_3_axis_digital_gyro
+SOC ?= quark_d2000
+TARGET ?= x86
+BASE_DIR := ../../../../
 APP_DIR := .
-
-CFLAGS += -I$(BASE_DIR)/drivers
 
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

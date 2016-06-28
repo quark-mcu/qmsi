@@ -44,23 +44,21 @@
 /**
  * Initialize QDA module.
  *
- * Initialize the Quark DFU Adaptation (QDA) module.
+ * Initialize the Quark DFU Adaptation (QDA) module. This implicitly also
+ * initializes the DFU state machine and the hardware required by XMODEM (i.e.,
+ * the UART and the RTC timer).
  *
- * @param[in] send_func The function to be used by the module to send packet.
  * @param[in] cfg	The DFU configuration.
  */
-void qda_init(int (*send_func)(uint8_t *pkt, size_t len), const dfu_cfg_t *cfg);
+void qda_init(const dfu_cfg_t *cfg);
 
-/**
- * Process QDA packet.
+/*
+ * Receive and process QDA packets.
  *
- * Parse, process, and reply to an incoming QDA packet.
- *
- * @param[in] data The buffer containing the packet.
- * @param[in] len  The length of packet or its upper bound (since XMODEM may
- * 		   add some garbage bytes).
+ * Receive and process QDA packets, until the communication becomes idle (i.e.,
+ * no data is received for a certain amount of time).
  */
-void qda_process_pkt(const uint8_t *data, size_t len);
+void qda_receive_loop();
 
 /**
  * @}

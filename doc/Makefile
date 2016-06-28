@@ -26,15 +26,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-MKDIR_HTML = ${mkdir -p html}
-
-RST_OUTPUT = html
-RST_FILES = $(shell find *.rst)
-RST_BUID = $(shell rst2html $(rst_name) --strict  \
-	   > $(RST_OUTPUT)/$(basename $(rst_name)).html)
-
-RST_BUILD_FILES = $(foreach rst_name,$(RST_FILES),$(RST_BUID))
-
 CAT_0 =
 CAT_1 = cat doxygen.log
 CAT = $(CAT_$(V))
@@ -43,15 +34,9 @@ API_HTML = @make -s -C api html
 API_PDF = @make -s -C api pdf
 
 
-.PHONY: clean all api_html api_pdf rst
+.PHONY: clean all api_html api_pdf
 
-all: rst api_html api_pdf
-
-buildHtmlDir:
-	@mkdir -p ${RST_OUTPUT}
-
-rst: buildHtmlDir
-	${RST_BUILD_FILES}
+all: api_html api_pdf
 
 api_html:
 	$(API_HTML)

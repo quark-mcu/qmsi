@@ -32,6 +32,7 @@
 #include "qm_common.h"
 
 #include "qdm_packets.h"
+#include "bl_data.h"
 #include "../dfu/dfu.h"
 /* qfu_format.h included because of authentication enum (qdm_auth_type_t) */
 #include "../qfu/qfu_format.h"
@@ -40,13 +41,34 @@
  * The size of the buffer used by the QDM module. It is equal to the size of
  * the biggest QDM packet, which is QDM_SYS_INFO_RSP.
  */
-#define QDM_BUF_SIZE                                                           \
-	(sizeof(qdm_generic_pkt_t) + sizeof(qdm_sys_info_rsp_payload_t))
+#define QDM_BUF_SIZE (sizeof(qdm_sys_info_rsp_t))
+
+#if (QUARK_SE)
+#define QDM_SYS_INFO_INIT_SOC_TYPE (QDM_SOC_TYPE_QUARK_SE)
+#define QDM_SYS_INFO_INIT_TARGET_LIST                                          \
+	{                                                                      \
+		{                                                              \
+			.target_type = QDM_TARGET_TYPE_X86                     \
+		}                                                              \
+		,                                                              \
+		{                                                              \
+			.target_type = QDM_TARGET_TYPE_SENSOR                  \
+		}                                                              \
+	}
+#elif(QUARK_D2000)
+#define QDM_SYS_INFO_INIT_SOC_TYPE (QDM_SOC_TYPE_QUARK_D2000)
+#define QDM_SYS_INFO_INIT_TARGET_LIST                                          \
+	{                                                                      \
+		{                                                              \
+			.target_type = QDM_TARGET_TYPE_X86                     \
+		}                                                              \
+	}
+#endif
 
 /*-----------------------------------------------------------------------*/
 /* FORWARD DECLARATIONS                                                  */
 /*-----------------------------------------------------------------------*/
-static void qdm_init();
+static void qdm_init(uint8_t alt_setting);
 static void qdm_get_processing_status(dfu_dev_status_t *status,
 				      uint32_t *poll_timeout_ms);
 static void qdm_clear_status();
@@ -64,14 +86,20 @@ static void qdm_abort_transfer();
  * QDM request handler variable (used by DFU core when alternate setting zero
  * is selected).
  */
-dfu_request_handler_t qdm_dfu_rh = {
-    &qdm_init,
-    &qdm_get_processing_status,
-    &qdm_clear_status,
-    &qdm_dnl_process_block,
-    &qdm_dnl_finalize_transfer,
-    &qdm_upl_fill_block,
+const dfu_request_handler_t qdm_dfu_rh = {
+    &qdm_init, &qdm_get_processing_status, &qdm_clear_status,
+    &qdm_dnl_process_block, &qdm_dnl_finalize_transfer, &qdm_upl_fill_block,
     &qdm_abort_transfer,
+};
+
+static qdm_sys_info_rsp_t sys_info_rsp = {
+    .qdm_pkt_type = QDM_SYS_INFO_RSP,
+    .sysupd_version = 0,
+    .soc_type = QDM_SYS_INFO_INIT_SOC_TYPE,
+    .auth_type = QFU_AUTH_NONE,
+    .target_count = BL_BOOT_TARGETS_NUM,
+    .partition_count = BL_FLASH_PARTITIONS_NUM,
+    .targets = QDM_SYS_INFO_INIT_TARGET_LIST,
 };
 
 /**
@@ -87,12 +115,6 @@ static struct qdm_buf {
  */
 static dfu_dev_status_t dfu_status;
 
-/**
- * The remaining time for processing of the latest QDM request. Currently used
- * only for the QDM_APP_ERASE request.
- */
-static unsigned int remaining_time_ms;
-
 /*-----------------------------------------------------------------------*/
 /* STATIC FUNCTIONS (QDM functions)                                      */
 /*-----------------------------------------------------------------------*/
@@ -104,36 +126,64 @@ static unsigned int remaining_time_ms;
  */
 static void prepare_sys_info_rsp()
 {
-	qdm_generic_pkt_t *pkt;
-	qdm_sys_info_rsp_payload_t *pl;
+	int i;
+	bl_flash_partition_t *part;
 
-	/* NOTE: optimization: use a pre-compiled response packet */
-	pkt = (qdm_generic_pkt_t *)qdm_buf.data;
-	pkt->type = QDM_SYS_INFO_RSP;
-	pl = (qdm_sys_info_rsp_payload_t *)pkt->payload;
-	pl->sysupd_version = 0x0100;
-	pl->soc_type = 0x00;
-	pl->auth_type = QFU_AUTH_NONE;
+	for (i = 0; i < BL_FLASH_PARTITIONS_NUM; i++) {
+		part = &bl_data->partitions[i];
+		sys_info_rsp.partitions[i].app_present =
+		    (*part->start_addr != 0xFFFFFFFF);
+		sys_info_rsp.partitions[i].app_version = part->app_version;
+	}
+	for (i = 0; i < BL_BOOT_TARGETS_NUM; i++) {
+		sys_info_rsp.targets[i].active_partition_idx =
+		    bl_data->targets[i].active_partition_idx;
+	}
 
-	qdm_buf.len = sizeof(*pkt) + sizeof(*pl);
+	qdm_buf.len = sizeof(sys_info_rsp);
 }
 
 /**
  * Application Erase.
  *
- * Erase all application code from the flash. The function is expected to run
- * in parallel with the DFU state machine.
+ * Erase all application code from flash.
  */
 static void app_erase()
 {
-	/* NOTE: we should set remaining_time_ms to the expected completion
-	 * time for the application erase and update it periodically with the
-	 * expected remaining time; the value is used to set the host
-	 * poll_timeout */
-	remaining_time_ms = 100;
-	/* NOTE: to do: implement application erase; if we fail, we should set
-	 * dfu_status to the proper error status */
-	remaining_time_ms = 0;
+	int i;
+	uint32_t page;
+	bl_flash_partition_t *part;
+
+	/*
+	 * First update bl-data by marking every partition as inconsistent and
+	 * setting the app version of each partition to undefined.
+	 */
+	for (i = 0; i < BL_FLASH_PARTITIONS_NUM; i++) {
+		part = &bl_data->partitions[i];
+		part->is_consistent = false;
+	}
+	bl_data_shadow_writeback();
+	/*
+	 * Then actually erase the partitions.
+	 */
+	for (i = 0; i < BL_FLASH_PARTITIONS_NUM; i++) {
+		part = &bl_data->partitions[i];
+		for (page = part->first_page;
+		     page < (part->first_page + part->num_pages); page++) {
+			qm_flash_page_erase(part->controller,
+					    QM_FLASH_REGION_SYS, page);
+		}
+	}
+	/* Finally mark back partitions as consistent */
+	/*
+	 * Note: updating bl-data twice is required to correctly handle failures
+	 * (e.g., power cuts) during the erase process.
+	 */
+	for (i = 0; i < BL_FLASH_PARTITIONS_NUM; i++) {
+		part = &bl_data->partitions[i];
+		part->is_consistent = true;
+	}
+	bl_data_shadow_writeback();
 }
 
 /**
@@ -154,7 +204,10 @@ static void process_qdm_req()
 		prepare_sys_info_rsp();
 		break;
 	case QDM_APP_ERASE:
-		/* NOTE: fix me: call app_erase() in a different thread */
+		/*
+		 * App erase takes just a few ms so we can safely perform it
+		 * here, instead of replying to the DFU_DNLOAD request first.
+		 */
 		app_erase();
 		/* No QDM response for this request; set len to zero */
 		qdm_buf.len = 0;
@@ -173,12 +226,15 @@ static void process_qdm_req()
 /*-----------------------------------------------------------------------*/
 
 /**
- * Initialize the DFU Request Handler.
+ * Initialize the QDM DFU Request Handler.
  *
- * This function must be called when a DFU alt setting associated with this
- * handler is selected.
+ * This function is called by the DFU logic when the QDM alternate setting is
+ * selected (i.e., alternate setting 0).
+ *
+ * @param[in] alt_setting The alternate setting triggering this handler (always
+ * 			  0 in the case of this handler).
  */
-static void qdm_init()
+static void qdm_init(uint8_t alt_setting)
 {
 	dfu_status = DFU_STATUS_OK;
 }
@@ -195,7 +251,7 @@ static void qdm_get_processing_status(dfu_dev_status_t *status,
 				      uint32_t *poll_timeout_ms)
 {
 	*status = dfu_status;
-	*poll_timeout_ms = remaining_time_ms;
+	*poll_timeout_ms = 0;
 }
 
 /**
@@ -280,7 +336,7 @@ static void qdm_upl_fill_block(uint32_t blk_num, uint8_t *data,
 	 * (typically a few kB).
 	 */
 	if ((qdm_buf.len > 0) && (req_len >= qdm_buf.len)) {
-		memcpy(data, qdm_buf.data, qdm_buf.len);
+		memcpy(data, &sys_info_rsp, qdm_buf.len);
 		*len = qdm_buf.len;
 	} else {
 		/* We upload nothing */

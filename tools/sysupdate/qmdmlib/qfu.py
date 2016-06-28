@@ -43,7 +43,7 @@ _ENDIAN = "<"   # Defines the endian for struct packing. ('<'=little, '>'=big)
 
 
 class QFUException(Exception):
-    """ QFU Header Exception """
+    """ QFU Exception """
 
     def __init__(self, message):
         super(QFUException, self).__init__(message)
@@ -92,51 +92,21 @@ class QFUDefineParser(object):
 
 
 class QFUImage(object):
-    """ Creates a QFU / DFU compatible file from a binary file.
-
-    Attributes:
-        content: Stores generated image content as a binary string.
-    """
+    """ Creates a QFU compatible file from a binary file. """
 
     def __init__(self):
-        self.content = ""
-
-    def crc(self, return_type=str):
-        """ Calculate CRC.
-
-        CRC32 as binary string or as defined with `format` of image file
-        ignoring the last 4 bytes
-
-        Args:
-            return_type (type): The return type of CRC value. (int or str)
-
-        Returns:
-            Formated CRC value.
-
-        Raises:
-            QFUException: In case of an invalid return_type.
-        """
-        if len(self.content) < 4:
-            raise QFUException("no content available")
-
-        crc = binascii.crc32(self.content[:-4]) & 0xffffffff
-        if return_type == int:
-            return crc
-
-        if return_type == str:
-            return struct.Struct("%sI" % _ENDIAN).pack(crc)
-
-        raise QFUException("unknown return type: %s" % return_type)
+        pass
 
     def make(self, header, infile):
-        """ Assembles the QFU Header, DFU Suffix and the binary data.
-
-        Result is stored in :attr:`content`.
+        """ Assembles the QFU Header and the binary data.
 
         Args:
             header (QFUHeader): Header containing all relevant information to
                                 create the image.
             infile (file): Open file object containing the binary data.
+
+        Returns:
+            The newly constructed binary data.
         """
         # Read input file size.
         infile.seek(0, os.SEEK_END)
@@ -146,13 +116,10 @@ class QFUImage(object):
         header.num_blocks = ((size-1) // header.block_size) + 2
 
         # Set QFU header and DFU suffix.
-        self.content = header.packed_qfu_header
+        content = header.packed_qfu_header
         infile.seek(0, os.SEEK_SET)
-        self.content += infile.read()
-        self.content += header.packed_dfu_suffix
-
-        # Compute CRC for suffix.
-        self.content = self.content[:-4] + self.crc(str)
+        content += infile.read()
+        return content
 
 
 class QFUHeader(object):
@@ -177,30 +144,23 @@ class QFUHeader(object):
     num_blocks = 0
     cipher_suite = 0
 
-    suffix_dfu_crc = 0
-    suffix_dfu_spec = 0x0100    # DFU 1.0
-    suffix_length = 16
-    suffix_release = 0xFFFF
-
     # Different structure formats. _ENDIAN defines little or big-endian.
     # H stands for uint16, I for uint32 and c for a single character.
     _header_struct = struct.Struct("%sHHHHIHHH" % _ENDIAN)
-    _suffix_struct = struct.Struct("%sHHHH3cBI" % _ENDIAN)
 
     def __init__(self):
         pass
 
     def print_info(self, prefix=""):
-        """ Prints verbose QFU Header and DFU Suffix information. """
+        """ Prints verbose QFU Header and information. """
         inset = " " * len(prefix)
-        print("%sQFU-Header and DFU-Suffix content:" % prefix)
+        print("%sQFU-Header content:" % prefix)
         print("%s    Partition:   %d" % (inset, self.partition_id))
         print("%s    Vendor ID:   0x%04x" % (inset, self.id_vendor))
         print("%s    Product ID:  0x%04x" % (inset, self.id_product))
         print("%s    Version:     %d" % (inset, self.version))
         print("%s    Block Size:  %d" % (inset, self.block_size))
         print("%s    Blocks:      %d" % (inset, self.num_blocks))
-        print("%s    DFU CRC:     0x%08x" % (inset, self.suffix_dfu_crc))
 
     def set_from_file(self, open_file):
         """ Read configuration file (C-header format) and update header
@@ -264,28 +224,9 @@ class QFUHeader(object):
         )
 
     @property
-    def _pack_suffix_tuple(self):
-        """ Tuple containing the suffix information in a defined order. """
-        return (
-            self.suffix_release,
-            self.id_product,
-            self.id_vendor,
-            self.suffix_dfu_spec,
-            'U', 'F', 'D',
-            self.suffix_length,
-            self.suffix_dfu_crc,
-        )
-
-    @property
     def packed_qfu_header(self):
         """ Binary representation of QFU header. """
         ret = "QFUH" + self._header_struct.pack(*self._pack_header_tuple)
         for _ in range(self.block_size-len(ret)):
             ret += '.'
-        return ret
-
-    @property
-    def packed_dfu_suffix(self):
-        """ Binary representation DFU suffix. """
-        ret = self._suffix_struct.pack(*self._pack_suffix_tuple)
         return ret

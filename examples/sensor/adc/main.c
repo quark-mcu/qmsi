@@ -98,7 +98,7 @@ int main(void)
 	xfer.callback_data = NULL;
 
 	/* Run the conversion. */
-	if (qm_ss_adc_convert(QM_SS_ADC_0, &xfer)) {
+	if (qm_ss_adc_convert(QM_SS_ADC_0, &xfer, NULL)) {
 		QM_PUTS("Error: qm_ss_adc_convert failed");
 		return 1;
 	}

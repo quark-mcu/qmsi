@@ -32,19 +32,30 @@
 #include "idt.h"
 #include "qm_interrupt.h"
 #include "qm_pinmux.h"
+#include "boot.h"
 #include "boot_clk.h"
 #include "flash_layout.h"
-#include "qm_gpio.h"
 #include "power_states.h"
 
 #if (SYSTEM_UPDATE_ENABLE)
 #include "dm.h"
+#include "bl_data.h"
+#include "qm_gpio.h"
+
+/* Flash configuration defines, valid when we are running at 32MHz */
+#define FLASH_US_COUNT (0x20)
+#define FLASH_WAIT_STATES (0x01)
+
+/** Flash configuration for writing to bl-data and QFU images. */
+static const qm_flash_config_t cfg_wr = {
+    .us_count = SYS_TICKS_PER_US_32MHZ / BIT(CLK_SYS_DIV_1),
+    .wait_states = FLASH_WAIT_STATES,
+    .write_disable = QM_FLASH_WRITE_ENABLE};
 #endif
 
 #if (DEBUG)
 static QM_ISR_DECLARE(double_fault_isr)
 {
-	QM_ASSERT("Double Fault ISR\n");
 	power_cpu_c1();
 }
 #endif
@@ -76,30 +87,14 @@ __attribute__((section(".rom_version"))) =
 /* Lakemont application's entry point (Flash1) */
 #define LMT_APP_ADDR (0x40030000)
 
-/* Sensor Subsystem application's entry point (Flash0) */
-#define SS_APP_ADDR (0x40000000)
-
-/*
- * GPIO pin assigned for JTAG sensing.
- * On Quark SE Development Board, this is the IO2 pin on header P3 pin 28.
- */
-#define GPIO_PIN_JTAG_HOOK (15)
-#define GPIO_PAD_JTAG_HOOK (49)
+/* Sensor Subsystem application's pointer to the entry point (Flash0) */
+#define SS_APP_PTR_ADDR (0x40000000)
 
 /* Factory settings for Crystal Oscillator */
 /* 7.45 pF load cap for Crystal */
 #define OSC0_CFG1_OSC0_FADJ_XTAL_DEFAULT (0x4)
 /* Crystal count value set to 5375 */
 #define OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_DEFAULT (0x2)
-
-static QM_ISR_DECLARE(aonpt_spurious_isr)
-{
-	QM_ISR_EOI(QM_IRQ_AONPT_0_VECTOR);
-}
-static QM_ISR_DECLARE(aongpio_spurious_isr)
-{
-	QM_ISR_EOI(QM_IRQ_AONGPIO_0_VECTOR);
-}
 
 /*
  * System power settings
@@ -150,33 +145,10 @@ static __inline__ void clock_setup(void)
 	/* Switch to 32MHz silicon oscillator */
 	boot_clk_hyb_set_mode(CLK_SYS_HYB_OSC_32MHZ, CLK_SYS_DIV_1);
 	clk_trim_apply(QM_FLASH_DATA_TRIM_CODE->osc_trim_32mhz);
-
-	/* Turn off the clock gate */
-	QM_CCU_MLAYER_AHB_CTL |= QM_CCU_USB_CLK_EN;
-
-	/* Set up the PLL */
-	QM_USB_PLL_CFG0 = QM_USB_PLL_CFG0_DEFAULT | QM_USB_PLL_PDLD;
-
-	/* Wait for the PLL lock */
-	while (0 == (QM_USB_PLL_CFG0 & QM_USB_PLL_LOCK)) {
-	}
 }
 
 /*
- * Initialize IRQ on AON peripheral so as to catch a spurious interrupt after a
- * warm reset.
- */
-static __inline__ void aon_handle_spurious_irq(void)
-{
-	/* The PIC IRR register may be asserted by the application before a warm
-	 * reset. IRR cannot be cleared by software, so let's just catch this
-	 * single spurious interrupt. */
-	qm_irq_request(QM_IRQ_AONPT_0, aonpt_spurious_isr);
-	qm_irq_request(QM_IRQ_AONGPIO_0, aongpio_spurious_isr);
-}
-
-/*
- * SCSS interrupt routing initalization.
+ * SCSS interrupt routing initialization.
  */
 static __inline__ void irq_setup(void)
 {
@@ -189,75 +161,6 @@ static __inline__ void irq_setup(void)
 	}
 }
 
-/*
- * Ensure that early JTAG requests can be served.
- *
- * At POR JTAG pins are enabled by default.
- * Once JTAG pins are disabled, it is impossible to access the TAP
- * without a reset.
- * It is then essential that the JTAG TAP can be accessed before
- * anything on its pins happens.
- * This is a race condition that can effectively cause the board to get bricked.
- *
- * This function implements a boot ROM hook to guarantee
- * enough time for a JTAG access.
- * The Boot ROM will busy loop for as long as WAIT_FOR_JTAG_PIN is set to 0.
- */
-static __inline__ void sense_jtag_probe(void)
-{
-	/* Hardware default (sticky):
-	 * - clock gating:
-	 *     - QM_CLK_PERIPH_REGISTER and QM_CLK_PERIPH_GPIO_REGISTER enabled
-	 *     - QM_CLK_PERIPH_CLK disabled
-	 * - pin muxing
-	 *     - gpio's muxed out
-	 *     - input pads enabled
-	 *     - pad pullup disabled
-	 * - gpio port configured as input
-	 */
-
-	qm_gpio_state_t state;
-
-	qm_pmux_pullup_en(GPIO_PAD_JTAG_HOOK, true);
-	qm_pmux_select(GPIO_PAD_JTAG_HOOK, QM_PMUX_FN_0);
-	qm_pmux_input_en(GPIO_PAD_JTAG_HOOK, true);
-	clk_periph_enable(CLK_PERIPH_REGISTER | CLK_PERIPH_CLK |
-			  CLK_PERIPH_GPIO_REGISTER);
-
-	do {
-		/* Busy loop to allow JTAG access */
-		qm_gpio_read_pin(QM_GPIO_0, GPIO_PIN_JTAG_HOOK, &state);
-	} while (state == QM_GPIO_LOW);
-
-	/* Restore hardware default settings */
-	clk_periph_disable(CLK_PERIPH_CLK);
-	qm_pmux_pullup_en(GPIO_PAD_JTAG_HOOK, false);
-};
-
-/*
- * System update pin MUX settings
- */
-static __inline__ void sys_update_pin_mux_setup(void)
-{
-#if (SYSTEM_UPDATE_VIA_SPI)
-	/* SPI Slave*/
-	qm_pmux_select(QM_PIN_ID_0, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_1, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_2, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_3, QM_PMUX_FN_2);
-
-#elif(SYSTEM_UPDATE_VIA_UART0)
-	/* UART 0*/
-	qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
-
-#elif(SYSTEM_UPDATE_VIA_UART1)
-	/* UART 1*/
-	qm_pmux_select(QM_PIN_ID_16, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_17, QM_PMUX_FN_2);
-#endif
-}
-
 static __inline__ void boot_services_setup()
 {
 }
@@ -265,9 +168,18 @@ static __inline__ void boot_services_setup()
 extern uint32_t __sensor_reset_vector[];
 static __inline__ void sensor_activation(void)
 {
-	/* write the ARC reset vector */
-	uint32_t *p = __sensor_reset_vector;
-	*p = SS_APP_ADDR;
+	/* Write the ARC reset vector.
+	 *
+	 * The ARC reset vector is in SRAM. The first 4 bytes of the Sensor
+	 * Subsystem Flash partition point to the application entry point
+	 * (pointer located at SS_APP_PTR_ADDR).
+	 * Write the pointer to the application entry point into the reset
+	 * vector.
+	 */
+	volatile uint32_t *ss_reset_vector = __sensor_reset_vector;
+	volatile uint32_t *sensor_startup = (uint32_t *)SS_APP_PTR_ADDR;
+
+	*ss_reset_vector = *sensor_startup;
 
 	/* Request ARC Run */
 	QM_SCSS_SS->ss_cfg |= QM_SS_CFG_ARC_RUN_REQ_A;
@@ -286,8 +198,6 @@ void rom_startup(void)
 	extern uint32_t __data_lma[];
 	extern uint32_t __data_size[];
 	extern uint32_t __bss_end[];
-	extern uint32_t __esram_lock_start[];
-	extern uint32_t __esram_lock_end[];
 
 	/* Zero out bss */
 	memset(__bss_start, 0x00, (uint32_t)__bss_end - (uint32_t)__bss_start);
@@ -295,19 +205,15 @@ void rom_startup(void)
 	/* Copy initialised variables */
 	memcpy(__data_vma, __data_lma, (size_t)__data_size);
 
-	/* Zero out locking variables */
-	memset(__esram_lock_start, 0x00,
-	       (uint32_t)__esram_lock_end - (uint32_t)__esram_lock_start);
-
 	power_setup();
 	clock_setup();
 
-	sense_jtag_probe();
+	boot_sense_jtag_probe();
 
 	/* Interrupt initialisation */
 	irq_setup();
 	idt_init();
-	aon_handle_spurious_irq();
+	boot_aon_handle_spurious_irq();
 	apic_init();
 #if (DEBUG)
 	qm_int_vector_request(QM_INT_VECTOR_DOUBLE_FAULT, double_fault_isr);
@@ -315,8 +221,34 @@ void rom_startup(void)
 	__asm__ __volatile__("sti");
 
 #if (SYSTEM_UPDATE_ENABLE)
+	qm_flash_set_config(QM_FLASH_0, &cfg_wr);
+	qm_flash_set_config(QM_FLASH_1, &cfg_wr);
+	bl_data_sanitize();
+
+	/*
+	 * Workaround for spurious LPC interrupts: in addition to checking if
+	 * the DM Sticky Bit has been set, we also check if the DM LPC pin is
+	 * grounded.
+	 *
+	 * This workaround increases the boot time for a cold boot, since the
+	 * board behavior is the following:
+	 * - Starts from cold boot
+	 * - Set DM LPC handler
+	 * - The handler triggers because of spurious interrupts during cold
+	 *   boots
+	 * - The handler performs a warm reset
+	 * - The board does not enter DM mode because of the extra check on
+	 *   DM LPC pin state
+	 */
+	qm_gpio_state_t state;
+
+	clk_periph_enable(CLK_PERIPH_REGISTER | CLK_PERIPH_CLK |
+			  CLK_PERIPH_GPIO_REGISTER);
+	qm_pmux_pullup_en(DM_CONFIG_LPC_PIN_ID, true);
+	qm_pmux_select(DM_CONFIG_LPC_PIN_ID, QM_PMUX_FN_0);
+	qm_gpio_read_pin(QM_GPIO_0, DM_CONFIG_LPC_PIN_ID, &state);
 	/* Check if the system update mode sticky bit is set */
-	if (DM_STICKY_BIT_CHK()) {
+	if (DM_STICKY_BIT_CHK() && state == QM_GPIO_LOW) {
 		DM_STICKY_BIT_CLR();
 		/* run the device management code; dm_main() never returns */
 		dm_main();
@@ -332,7 +264,7 @@ void rom_startup(void)
 	 * the application has been programmed.
 	 */
 
-	if (0xffffffff != *(uint32_t *)SS_APP_ADDR) {
+	if (0xffffffff != *(uint32_t *)SS_APP_PTR_ADDR) {
 		sensor_activation();
 	}
 

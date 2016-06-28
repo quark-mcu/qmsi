@@ -64,11 +64,16 @@ static void uart_example_rx_callback(void *data, int error,
 static uint8_t rx_buffer[BIG_NUMBER_RX];
 static volatile bool rx_callback_invoked = false;
 
+/* Request data for UART asynchronous operation (transfer descriptor) needs to
+ * be kept alive during request processing. It is safer when it is globally
+ * accessible within the file - we are sure then that they will be always in the
+ * scope when IRQ will be triggered*/
+static qm_uart_transfer_t async_xfer_desc = {0};
+
 /* Sample UART0 QMSI application. */
 int main(void)
 {
 	qm_uart_config_t cfg = {0};
-	qm_uart_transfer_t xfer = {0};
 	qm_uart_status_t uart_status __attribute__((unused)) = 0;
 	int ret __attribute__((unused));
 	const uint32_t xfer_irq_data = BANNER_IRQ_ID;
@@ -128,25 +133,25 @@ int main(void)
 #endif
 
 	/* Used on both TX and RX. */
-	xfer.callback_data = (void *)&xfer_irq_data;
+	async_xfer_desc.callback_data = (void *)&xfer_irq_data;
 
 	/* IRQ based TX. */
-	xfer.data = (uint8_t *)BANNER_IRQ;
-	xfer.data_len = sizeof(BANNER_IRQ);
-	xfer.callback = uart_example_tx_callback;
-	ret = qm_uart_irq_write(STDOUT_UART, &xfer);
-	QM_ASSERT(QM_UART_IDLE == ret);
+	async_xfer_desc.data = (uint8_t *)BANNER_IRQ;
+	async_xfer_desc.data_len = sizeof(BANNER_IRQ);
+	async_xfer_desc.callback = uart_example_tx_callback;
+	ret = qm_uart_irq_write(STDOUT_UART, &async_xfer_desc);
+	QM_ASSERT(0 == ret);
 
 	clk_sys_udelay(WAIT_1SEC);
 
 	/* IRQ based RX. */
 	rx_callback_invoked = false;
 
-	xfer.data = rx_buffer;
-	xfer.data_len = BIG_NUMBER_RX;
-	xfer.callback = uart_example_rx_callback;
-	ret = qm_uart_irq_read(STDOUT_UART, &xfer);
-	QM_ASSERT(QM_UART_IDLE == ret);
+	async_xfer_desc.data = rx_buffer;
+	async_xfer_desc.data_len = BIG_NUMBER_RX;
+	async_xfer_desc.callback = uart_example_rx_callback;
+	ret = qm_uart_irq_read(STDOUT_UART, &async_xfer_desc);
+	QM_ASSERT(0 == ret);
 	QM_PRINTF("\nWaiting for you to type %d characters... ?\n",
 		  BIG_NUMBER_RX);
 
@@ -169,7 +174,7 @@ int main(void)
 		qm_uart_get_status(STDOUT_UART, &uart_status);
 		if (QM_UART_RX_BUSY & uart_status) {
 			/* There is some data in the RX FIFO, let's fetch it. */
-			ret = qm_uart_irq_read(STDOUT_UART, &xfer);
+			ret = qm_uart_irq_read(STDOUT_UART, &async_xfer_desc);
 			QM_ASSERT(0 == ret);
 
 			ret = qm_uart_irq_read_terminate(STDOUT_UART);
@@ -186,7 +191,7 @@ int main(void)
 	QM_ASSERT(0 == ret);
 
 	/* Used on both TX and RX. */
-	xfer.callback_data = (void *)&xfer_dma_data;
+	async_xfer_desc.callback_data = (void *)&xfer_dma_data;
 
 	/* DMA based TX. */
 	ret =
@@ -194,10 +199,10 @@ int main(void)
 				       QM_DMA_MEMORY_TO_PERIPHERAL);
 	QM_ASSERT(0 == ret);
 
-	xfer.data = (uint8_t *)BANNER_DMA;
-	xfer.data_len = sizeof(BANNER_DMA);
-	xfer.callback = uart_example_tx_callback;
-	ret = qm_uart_dma_write(STDOUT_UART, &xfer);
+	async_xfer_desc.data = (uint8_t *)BANNER_DMA;
+	async_xfer_desc.data_len = sizeof(BANNER_DMA);
+	async_xfer_desc.callback = uart_example_tx_callback;
+	ret = qm_uart_dma_write(STDOUT_UART, &async_xfer_desc);
 	QM_ASSERT(0 == ret);
 
 	clk_sys_udelay(WAIT_1SEC);
@@ -211,10 +216,10 @@ int main(void)
 	QM_ASSERT(0 == ret);
 
 	QM_PUTS("Waiting for data on STDOUT_UART (DMA mode) ...");
-	xfer.data = (uint8_t *)rx_buffer;
-	xfer.data_len = BIG_NUMBER_RX;
-	xfer.callback = uart_example_rx_callback;
-	ret = qm_uart_dma_read(STDOUT_UART, &xfer);
+	async_xfer_desc.data = (uint8_t *)rx_buffer;
+	async_xfer_desc.data_len = BIG_NUMBER_RX;
+	async_xfer_desc.callback = uart_example_rx_callback;
+	ret = qm_uart_dma_read(STDOUT_UART, &async_xfer_desc);
 	QM_ASSERT(0 == ret);
 
 	wait_rx_callback_timeout(TIMEOUT_10SEC);

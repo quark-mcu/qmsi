@@ -40,6 +40,7 @@ SUBDIRS := $(filter %/, $(wildcard ./*/))
 
 ifeq ($(SOC), quark_se)
 SUBDIRS := $(subst ./adc/,,${SUBDIRS})
+SUBDIRS := $(subst ./adc_continuous/,,${SUBDIRS})
 SUBDIRS := $(subst ./quark_d2000/,,${SUBDIRS})
 ifeq ($(TARGET), x86)
 #### Excluding the non supported modules
@@ -51,6 +52,7 @@ else ifeq ($(TARGET), sensor)
 SUBDIRS := $(subst ./pic_timer/,,${SUBDIRS})
 SUBDIRS := $(subst ./crypto/,,${SUBDIRS})
 SUBDIRS := $(subst ./quark_se/,,${SUBDIRS})
+SUBDIRS := $(subst ./power_profiler/,,${SUBDIRS})
 endif
 else ifeq ($(SOC), quark_d2000)
 #### Excluding the non supported modules

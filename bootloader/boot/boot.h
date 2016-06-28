@@ -27,39 +27,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_soc_regs.h"
-#include "qm_gpio.h"
-#include "clk.h"
+#ifndef __BOOT_H__
+#define __BOOT_H__
 
-#if (QUARK_SE)
-/* Led on AtlasHills board TODO: remove codename*/
-#define LED_BIT 25
-#elif(QUARK_D2000)
-/* LED on Intel(R) Quark(TM) Microcontroller D2000 Development Platform */
-#define LED_BIT 24
-#endif
+/**
+ * Ensure that early JTAG requests can be served.
+ *
+ * Application firmware may prevent JTAG access. Few examples are a faulty
+ * application that result in continuous resets, or the application muxing the
+ * JTAG pins with alternate functions (some SoCs like Quark D2000 allow it).
+ *
+ * This function implements a bootloader hook to guarantee enough time for a
+ * JTAG access.
+ * The bootloader will busy loop for as long as a specific GPIO is set to 0.
+ *
+ */
+void boot_sense_jtag_probe(void);
 
-#define DELAY 300000UL
+/**
+ * Handle AON peripherals spurious irq.
+ *
+ * Initialize interrupt vector for AON peripheral to catch
+ * spurious interrupts after a warm reset.
+ */
+void boot_aon_handle_spurious_irq(void);
 
-#define MAX_LED_BLINKS (10)
-
-static qm_gpio_port_config_t cfg;
-
-int main(void)
-{
-	uint32_t counter = 0;
-	QM_PUTS("Starting: Led blink\n");
-
-	cfg.direction = BIT(LED_BIT);
-	qm_gpio_set_config(QM_GPIO_0, &cfg);
-
-	while (counter < MAX_LED_BLINKS) {
-		qm_gpio_set_pin(QM_GPIO_0, LED_BIT);
-		clk_sys_udelay(DELAY);
-		qm_gpio_clear_pin(QM_GPIO_0, LED_BIT);
-		clk_sys_udelay(DELAY);
-		counter++;
-	}
-	QM_PUTS("Finished: Led blink\n");
-	return 0;
-}
+#endif /* __BOOT_H__ */

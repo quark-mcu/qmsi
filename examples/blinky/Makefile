@@ -27,10 +27,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### Led blink example makefile
+### Blinky example makefile
 
 ### Variables
-APP_NAME = led_blink
+APP_NAME = blinky
 SOC ?= quark_d2000
 TARGET ?= x86
 BASE_DIR := ../..
