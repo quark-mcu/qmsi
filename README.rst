@@ -34,13 +34,12 @@ This release has been validated with the following hardware:
 External Dependencies
 *********************
 
-* The ISSM toolchain is required to build the source code. It provides both the
-IAMCU and the ARCMCU toolchains (i586-intel-elfiamcu and arc-elf32, respectively).
+* The ISSM toolchain (version: 2016-05-12) is required to build the source code. It provides both the IAMCU and the ARCMCU toolchains (i586-intel-elfiamcu and arc-elf32, respectively).
 * OpenOCD is required to flash applications and ROM files onto the SoC.
 * GDB is optional, it is used as a supplement to OpenOCD for debugging.
 * `Intel® System Studio for Microcontrollers <https://software.intel.com/en-us/intel-system-studio-microcontrollers>`_ is optional.
 
-* The toolchain is provided from both within the ISSM package or `standalone tarballs <https://github.com/01org/qmsi/releases/tag/v1.1.0-alpha>`_.
+* The toolchain is provided from both within the ISSM package or `standalone tarballs <https://software.intel.com/en-us/articles/issm-toolchain-only-download>`_.
 
 License
 *******
