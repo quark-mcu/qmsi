@@ -32,6 +32,8 @@
 
 #include <stdint.h>
 
+#include "bl_data.h"
+
 /*
  * NOTE: different compilers use different directives for packing structs;
  * therefore we define a macro whose value will depend on the specific compiler
@@ -53,6 +55,22 @@ typedef enum {
 } qdm_pkt_type_t;
 
 /**
+ * The enumeration of SoC types.
+ */
+typedef enum {
+	QDM_SOC_TYPE_QUARK_D2000 = 0, /**< Quark D2000 SoC. */
+	QDM_SOC_TYPE_QUARK_SE = 1,    /**< Quark SE SoC. */
+} qdm_soc_type_t;
+
+/**
+ * The enumeration of Target types.
+ */
+typedef enum {
+	QDM_TARGET_TYPE_X86 = 0,    /**< x86 target. */
+	QDM_TARGET_TYPE_SENSOR = 1, /**< Sensor target. */
+} qdm_target_type_t;
+
+/**
  * The generic structure of a QDM packet.
  */
 typedef struct __QM_ATTR_PACKED__ {
@@ -60,17 +78,31 @@ typedef struct __QM_ATTR_PACKED__ {
 	uint8_t payload[]; /**< The type-specific payload/structure. */
 } qdm_generic_pkt_t;
 
+typedef struct __QM_ATTR_PACKED__ {
+	uint8_t app_present;
+	uint32_t app_version;
+} qdm_partition_dsc_t;
+
+typedef struct __QM_ATTR_PACKED__ {
+	const uint8_t target_type;
+	uint8_t active_partition_idx;
+} qdm_target_dsc_t;
+
 /**
  * Type-specific structure for the QDM System Information response packet.
  */
-/*
- * NOTE: this is a first stub to be completed with other fields when
- * defined.
- */
 typedef struct __QM_ATTR_PACKED__ {
-	uint16_t sysupd_version; /**< The bootloader version. */
-	uint8_t soc_type;	/**< The SOC type. */
-	uint8_t auth_type;       /**< The active authentication type. */
-} qdm_sys_info_rsp_payload_t;
+	const uint32_t qdm_pkt_type;
+	const uint32_t sysupd_version; /**< The bootloader version. */
+	const uint8_t soc_type;	/**< The SOC type. */
+	const uint8_t auth_type;       /**< The active authentication type. */
+	const uint8_t target_count;    /**< Number of boot targets. */
+	const uint8_t partition_count; /**< Number of boot partitions. */
+
+	/** List of target descriptors. */
+	qdm_target_dsc_t targets[BL_BOOT_TARGETS_NUM];
+	/** List of partition descriptors. */
+	qdm_partition_dsc_t partitions[BL_FLASH_PARTITIONS_NUM];
+} qdm_sys_info_rsp_t;
 
 #endif /* __QDM_PACKETS_H__ */

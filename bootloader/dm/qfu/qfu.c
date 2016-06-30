@@ -30,17 +30,48 @@
 #include <string.h>
 
 #include "qm_common.h"
+#include "qm_flash.h"
+#include "clk.h"
 
 #include "qfu_format.h"
+#include "bl_data.h"
 #include "../dfu/dfu.h"
 
-/* NOTE: move to the bootloader config file when such a file is defined */
-#define DFU_BLOCK_SIZE_MAX (2048)
+/* FIXME: remove debug macros */
+/*
+ * If !SYSTEM_UPDATE_ENABLE, we are compiling this code for an example /
+ * debugging app, so we enable the debugging printf and replace calls to
+ * qm_flash with calls to the debugging printf.
+ */
+#if (!SYSTEM_UPDATE_ENABLE)
+#define UNUSED(x) (void)(x)
+#define qm_flash_page_write(ctrl, reg, pg, data, len)                          \
+	do {                                                                   \
+		DBG_PRINTF("[SUPPRESSED] qm_flash_page_write()\n");            \
+		UNUSED(pg);                                                    \
+	} while (0);
+#define DBG_PRINTF(...) QM_PRINTF(__VA_ARGS__)
+#else
+#define DBG_PRINTF(...)
+#endif
+
+/*
+ * NOTE: the DFU block size is defined in multiple places and in different ways;
+ * a patch should be made to have just one definition.
+ */
+#define DFU_BLOCK_SIZE_MAX (QM_FLASH_PAGE_SIZE_BYTES)
+
+/*
+ * The block number of the first data block; to be changed to a variable once
+ * authentication is implemented (it will be 1 in case of no authentication, 2
+ * or more in case of authentication).
+ */
+#define FIRST_DATA_BLK_NUM (1)
 
 /*-----------------------------------------------------------------------*/
 /* FORWARD DECLARATIONS                                                  */
 /*-----------------------------------------------------------------------*/
-static void qfu_init();
+static void qfu_init(uint8_t alt_setting);
 static void qfu_get_status(dfu_dev_status_t *status, uint32_t *poll_timeout_ms);
 static void qfu_clear_status();
 static void qfu_dnl_process_block(uint32_t block_num, const uint8_t *data,
@@ -57,51 +88,128 @@ static void qfu_abort_transfer();
  * QFU request handler variable (used by DFU core when an alternate setting
  * different from 0 is selected).
  */
-dfu_request_handler_t qfu_dfu_rh = {
-    &qfu_init,
-    &qfu_get_status,
-    &qfu_clear_status,
-    &qfu_dnl_process_block,
-    &qfu_dnl_finalize_transfer,
-    &qfu_upl_fill_block,
-    &qfu_abort_transfer,
+const dfu_request_handler_t qfu_dfu_rh = {
+    &qfu_init, &qfu_get_status, &qfu_clear_status, &qfu_dnl_process_block,
+    &qfu_dnl_finalize_transfer, &qfu_upl_fill_block, &qfu_abort_transfer,
 };
 
-/**
- * The QFU block buffer.
- */
-static struct blk_buf {
-	unsigned int len;		  /**< The length of the block */
-	uint8_t data[DFU_BLOCK_SIZE_MAX]; /**< The actual buffer */
-} qfu_block;
+/** The DFU (error) status of this DFU request handler. */
+static dfu_dev_status_t qfu_err_status;
+
+/** The partition associated with the current alternate setting. */
+static bl_flash_partition_t *part;
+/** The current alternate setting; needed to verify the QFU header. */
+static uint8_t active_alt_setting;
+
+/** The header of the QFU image being processed. */
+static qfu_hdr_t img_hdr;
 
 /**
- * The DFU status of this DFU request handler.
+ * Prepare BL-Data Section to firmware update.
+ *
+ * In case of single-bank configuration, the active partition for the
+ * partition's target is set to invalid and the updated BL-Data is stored in
+ * the Backup copy; then BL-Data Main is erased. In case of dual-bank
+ * configuration nothing is done.
  */
-static dfu_dev_status_t qfu_err_status;
+static void prepare_bl_data()
+{
+	/* Flag partition as invalid */
+	part->is_consistent = false;
+	/* Write back bl-data to flash */
+	bl_data_shadow_writeback();
+}
+
+/**
+ * Handle a block expected to contain a QFU header.
+ *
+ * @param[in] data The block to be processed.
+ * @param[in] len  The len of the block.
+ */
+static void qfu_handle_hdr(const uint8_t *data, uint32_t len)
+{
+	DBG_PRINTF("handle_qfu_hdr(): len = %u\n", len);
+	qfu_hdr_t *hdr;
+
+	hdr = (qfu_hdr_t *)data;
+	if (len < sizeof(qfu_hdr_t) || hdr->partition != active_alt_setting) {
+		qfu_err_status = DFU_STATUS_ERR_ADDRESS;
+		return;
+	}
+	/* NOTE: todo: verify the other header fields (vid, pid, etc.) */
+	/* NOTE: fix me: for now we force block size to be equal to page size */
+	if (hdr->block_sz != QM_FLASH_PAGE_SIZE_BYTES) {
+		DBG_PRINTF("Block size error: %d\n", hdr->block_sz);
+		qfu_err_status = DFU_STATUS_ERR_VENDOR;
+		return;
+	}
+	/* Store header in RAM */
+	memcpy(&img_hdr, hdr, sizeof(img_hdr));
+}
+
+/**
+ * Handle a block expected to contain a QFU data block to be written to flash.
+ *
+ * @param[in] data The block to be processed.
+ * @param[in] len  The len of the block.
+ */
+static void qfu_handle_blk(uint32_t blk_num, const uint8_t *data, uint32_t len)
+{
+	DBG_PRINTF("handle_qfu_blk(): blk_num = %u; len = %u\n", blk_num, len);
+	uint32_t page_num;
+
+	/*
+	 * Verify block validity:
+	 * - block_num must be < number of blocks declared in header
+	 * - len must be equal to declared block size, with the exception of
+	 *   the last, which can be smaller (but not greater!)
+	 */
+	if (blk_num >= img_hdr.n_blocks || len > img_hdr.block_sz ||
+	    (blk_num + 1 < img_hdr.n_blocks && len != img_hdr.block_sz)) {
+		qfu_err_status = DFU_STATUS_ERR_ADDRESS;
+		return;
+	}
+	/* If first data block, perform anti-brownout check */
+	if (blk_num == FIRST_DATA_BLK_NUM) {
+		/* NOTE: to do: perform anti-brownout check */
+		prepare_bl_data();
+	}
+	/*
+	 * Express len as a multiple of the word size, rounding it up if needed.
+	 *
+	 * The round up is needed since the size of the last block may not be a
+	 * multiple of the word size. The extra bytes we write in such a case
+	 * is just garbage from the previous block.
+	 */
+	len = (len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+	page_num = part->first_page + (blk_num - FIRST_DATA_BLK_NUM);
+	qm_flash_page_write(part->controller, QM_FLASH_REGION_SYS, page_num,
+			    (uint32_t *)data, len);
+}
 
 /*-----------------------------------------------------------------------*/
 /* STATIC FUNCTIONS (DFU Request Handler implementation)                 */
 /*-----------------------------------------------------------------------*/
 
 /**
- * Initialize the DFU Request Handler.
+ * Initialize the QFU DFU Request Handler.
  *
- * This function is called when a DFU alt setting associated with this handler
- * is selected.
+ * This function is called when a QFU alt setting is selected (i.e., every
+ * alternate setting > 0).
+ *
+ * @param[in] alt_setting The specific alternate setting activating this
+ * 			  handler.
  */
-static void qfu_init()
+static void qfu_init(uint8_t alt_setting)
 {
+	active_alt_setting = alt_setting;
+	/* Decrement alt setting since first QFU alt setting is 1 and not 0 */
+	part = &bl_data->partitions[alt_setting - 1];
 	qfu_err_status = DFU_STATUS_OK;
-	qfu_block.len = 0;
 }
 
 /**
  * Get the status and state of the handler.
- *
- * NOTE: in case of the QFU handler, this function triggers the writing into the
- * flash of the QFU block previously transferred in a DNLOAD request (if any).
- * The pool timeout returned is the expected time to write the block.
  *
  * @param[out] status The status of the processing (OK or error code)
  * @param[out] poll_timeout_ms The poll_timeout to be returned to the host.
@@ -110,11 +218,13 @@ static void qfu_init()
  */
 static void qfu_get_status(dfu_dev_status_t *status, uint32_t *poll_timeout_ms)
 {
-	/* NOTE: stub; just return 'done' (poll_timeout_ms = 0) for now */
 	*status = qfu_err_status;
+	/*
+	 * NOTE: poll_timeout is always set to zero because the flash is
+	 * updated in qfu_dnl_process_block() (i.e., as soon as the block is
+	 * received). This is fine for QDA but may need to be changed for USB.
+	 */
 	*poll_timeout_ms = 0;
-
-	qfu_block.len = 0;
 }
 
 /**
@@ -126,7 +236,6 @@ static void qfu_get_status(dfu_dev_status_t *status, uint32_t *poll_timeout_ms)
 static void qfu_clear_status()
 {
 	qfu_err_status = DFU_STATUS_OK;
-	qfu_block.len = 0;
 }
 
 /**
@@ -139,9 +248,19 @@ static void qfu_clear_status()
 static void qfu_dnl_process_block(uint32_t block_num, const uint8_t *data,
 				  uint16_t len)
 {
-	/* NOTE: stub; for now we just copy the block into the QFU buffer */
-	memcpy(qfu_block.data, data, len);
-	qfu_block.len = len;
+	if (block_num == 0) {
+		/* Header block */
+		qfu_handle_hdr(data, len);
+		return;
+	}
+	if (block_num == 1 && img_hdr.cipher != QFU_AUTH_NONE) {
+		/* Authentication block */
+		/* NOTE: not supported for now, set error status */
+		qfu_err_status = DFU_STATUS_ERR_FILE;
+		return;
+	}
+	/* Data block */
+	qfu_handle_blk(block_num, data, len);
 }
 
 /**
@@ -158,7 +277,18 @@ static void qfu_dnl_process_block(uint32_t block_num, const uint8_t *data,
  */
 static int qfu_dnl_finalize_transfer()
 {
-	/* NOTE: stub */
+	DBG_PRINTF("Finalize update\n");
+	int t_idx;
+	/*
+	 * NOTE: to do: add a block_cnt parameter and check that
+	 * block_cnt ==  qfu_buf.block_num
+	 */
+
+	part->is_consistent = true;
+	part->app_version = img_hdr.version;
+	t_idx = part->target_idx;
+	bl_data->targets[t_idx].active_partition_idx = active_alt_setting - 1;
+	bl_data_shadow_writeback();
 
 	return 0;
 }
@@ -196,5 +326,6 @@ static void qfu_upl_fill_block(uint32_t blk_num, uint8_t *data,
  */
 static void qfu_abort_transfer()
 {
-	qfu_block.len = 0;
+	/* calling bl_data_sanitize() will copy backup over main if needed */
+	bl_data_sanitize();
 }

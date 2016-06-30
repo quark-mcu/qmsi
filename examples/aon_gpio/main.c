@@ -43,7 +43,7 @@
  */
 #define PIN_INTR 4
 
-static void aon_gpio_example_callback(void*, uint32_t);
+static void aon_gpio_example_callback(void *, uint32_t);
 
 static volatile bool callback_invoked = false;
 

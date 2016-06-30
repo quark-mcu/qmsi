@@ -51,20 +51,17 @@ void mbox_cb(void *data);
  * Declaration of the flags used to know when a mailbox message has been
  * received.
  */
-volatile bool mb_got_message[QM_MBOX_CH_NUM];
+volatile bool mb_got_message[QM_MBOX_CH_NUM] = {false, false, false, false,
+						false, false, false, false};
+
 qm_mbox_msg_t tx_data, rx_data;
-qm_mbox_ch_t mbox_pairs[TEST_CASES_NUM][2] = {{QM_MBOX_CH_0, QM_MBOX_CH_1},
-					      {QM_MBOX_CH_2, QM_MBOX_CH_3},
-					      {QM_MBOX_CH_4, QM_MBOX_CH_5},
-					      {QM_MBOX_CH_6, QM_MBOX_CH_7},
-					      {QM_MBOX_CH_0, QM_MBOX_CH_4},
-					      {QM_MBOX_CH_1, QM_MBOX_CH_5},
-					      {QM_MBOX_CH_2, QM_MBOX_CH_6},
-					      {QM_MBOX_CH_3, QM_MBOX_CH_7},
-					      {QM_MBOX_CH_4, QM_MBOX_CH_0},
-					      {QM_MBOX_CH_5, QM_MBOX_CH_1},
-					      {QM_MBOX_CH_6, QM_MBOX_CH_2},
-					      {QM_MBOX_CH_7, QM_MBOX_CH_3}};
+qm_mbox_ch_t mbox_pairs[TEST_CASES_NUM][2] = {
+    {QM_MBOX_CH_0, QM_MBOX_CH_1}, {QM_MBOX_CH_2, QM_MBOX_CH_3},
+    {QM_MBOX_CH_4, QM_MBOX_CH_5}, {QM_MBOX_CH_6, QM_MBOX_CH_7},
+    {QM_MBOX_CH_0, QM_MBOX_CH_4}, {QM_MBOX_CH_1, QM_MBOX_CH_5},
+    {QM_MBOX_CH_2, QM_MBOX_CH_6}, {QM_MBOX_CH_3, QM_MBOX_CH_7},
+    {QM_MBOX_CH_4, QM_MBOX_CH_0}, {QM_MBOX_CH_5, QM_MBOX_CH_1},
+    {QM_MBOX_CH_6, QM_MBOX_CH_2}, {QM_MBOX_CH_7, QM_MBOX_CH_3}};
 int ofset = 0x100;
 
 /*
@@ -160,14 +157,20 @@ int loopback_one(int pair)
 
 int read_and_verify(qm_mbox_ch_t mbox, int loop)
 {
-	int i, wait_loop = MBOX_READ_TIMEOUT;
-	bool tmp = false;
+	int i;
 
-	/* Loop here, waiting mailbox IRQ */
-	while ((false == tmp) && (wait_loop--)) {
-		tmp = mb_got_message[mbox];
+/* Loop here, waiting mailbox IRQ */
+#if DEBUG
+	/* In DEBUG build we wait forever.
+	 * To allow breakpoints on the other core */
+	while (false == mb_got_message[mbox]) {
+#else
+	int wait_loop = MBOX_READ_TIMEOUT;
+	while ((false == mb_got_message[mbox]) && (wait_loop--)) {
+#endif
 		clk_sys_udelay(DELAY);
 	}
+
 	if (true != mb_got_message[mbox]) {
 		QM_MBOX_PRINTF("Error: Reading failed on timeout\n");
 		return -EIO;

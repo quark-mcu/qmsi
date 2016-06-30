@@ -36,6 +36,14 @@ TARGET ?= sensor
 BASE_DIR := ../../..
 APP_DIR := .
 
+ifeq ($(TARGET),x86)
+$(error Supported TARGET values are 'sensor')
+endif
+
+ifeq ($(SOC),quark_d2000)
+$(error Supported SOC values are 'quark_se')
+endif
+
 CFLAGS += -I$(BASE_DIR)/drivers
 
 ### Make includes

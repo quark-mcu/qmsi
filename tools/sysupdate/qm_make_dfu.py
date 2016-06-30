@@ -48,7 +48,7 @@ Optional Arguments:
     -v, --verbose  increase verbosity
     -c CFILE       specify the configuration file (C-header format)
     -p PART        target partition number [default: 0]
-
+    --block-size   size of one dfu block [default: 2048]
 This script uses C-style header files to generate QFU compatible.dfu image
 files.
 """
@@ -87,6 +87,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p", metavar="PART", type=int, dest="partition", default=0,
         help="target partition number [default: %(default)s]")
+    parser.add_argument(
+        "--block-size", metavar="SIZE", type=int, dest="block_size",
+        default=2048, help="dfu block size [default: %(default)s]")
 
     args = parser.parse_args()
 
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     header = qmdmlib.QFUHeader()
     header.partition_id = int(args.partition)
     header.padding = True
-    header.block_size = 1024
+    header.block_size = args.block_size
 
     # Populate header information from configuration file. This will overwrite
     # previous defined parameters.
@@ -117,14 +120,16 @@ if __name__ == "__main__":
     except IOError as error:
         parser.error(error)
 
+    dfu_image = qmdmlib.DFUImage()
+    data = dfu_image.add_suffix(data)
+
     if args.verbose > 0:
-        header.suffix_dfu_crc = image.crc(int)
         header.print_info(parser.prog + ": ")
 
     # Write output file.
     try:
         fh = open(args.output_file, "wb")
-        fh.write(image.content)
+        fh.write(data)
         fh.close()
         if not args.quiet:
             print("%s: %s written" % (parser.prog, args.output_file))

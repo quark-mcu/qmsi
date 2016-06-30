@@ -28,7 +28,7 @@ Body
 * Add one empty line between body and commit meta-data (i.e. Change-Id:,
   Signed-off-by:)
 * Add one Signed-off-by line per developer who worked on that patch
-  ('git commit -s')
+  ('git commit -s'). Note the sign-off line can be longer than 72 characters.
 * You should answer the questions below when writing the commit msg body:
 
   1) Why is this patch necessary?

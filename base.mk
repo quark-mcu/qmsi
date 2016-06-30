@@ -120,13 +120,11 @@ LDFLAGS += -Xlinker --gc-sections
 ifeq ($(BUILD), debug)
 CFLAGS += -O0 -g -DDEBUG
 else ifeq ($(BUILD), release)
-CFLAGS += -Os
+CFLAGS += -Os -fomit-frame-pointer
 else
 $(error Supported BUILD values are 'release' and 'debug')
 endif
 $(info BUILD = $(BUILD))
-
-
 
 CSTD ?= c99
 ifeq ($(CSTD), c99)
@@ -138,6 +136,12 @@ $(error Supported C standards are 'c99' and 'c90')
 endif
 $(info CSTD = $(CSTD))
 
+SOC_WATCH_ENABLE ?= 0
+ifeq ($(SOC_WATCH_ENABLE), 1)
+CFLAGS += -DSOC_WATCH_ENABLE=1
+else ifneq ($(SOC_WATCH_ENABLE), 0)
+$(error Supported SOC_WATCH_ENABLE values are '1' and '0')
+endif
 
 BIN = bin
 OBJ = obj
@@ -197,6 +201,10 @@ endif
 ### If interrupt handling is done externally, like in Zephyr.
 ifeq ($(ISR), handled)
 CFLAGS += -DISR_HANDLED
+endif
+
+ifeq ($(RTOS),zephyr)
+CFLAGS += -DZEPHYR_OS
 endif
 
 .PHONY: all clean realclean

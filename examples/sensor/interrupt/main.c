@@ -89,40 +89,33 @@ void ss_gpio_interrupt_example(void)
 			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_LS_SYNC);
 
 	/* Setting pin 2 as OUTPUT */
-	__builtin_arc_sr(BIT(2),
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DDR);
+	__builtin_arc_sr(BIT(2), QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DDR);
 
 	/* Register the SS GPIO interrupt */
 	qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, ss_gpio_interrupt_isr);
 
 	/* Set the bit 3 to rising edge-sensitive */
-	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE +
-				     QM_SS_GPIO_INTTYPE_LEVEL);
+	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTTYPE_LEVEL);
 	/* unmask SS GPIO 3 interrupt only */
-	__builtin_arc_sr(~BIT(3),
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
+	__builtin_arc_sr(~BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
 	/* Clear SS GPIO interrupt requests */
-	__builtin_arc_sr(BIT(3),
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_PORTA_EOI);
+	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_PORTA_EOI);
 	/* Enable SS GPIO interrupt */
-	__builtin_arc_sr(BIT(3),
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTEN);
+	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTEN);
 
 	for (i = 0; i < NUM_LOOPS; i++) {
 		/* Toggling the SS GPIO 2, will trigger the interrupt on SS GPIO
 		 * 3 */
 		clk_sys_udelay(DELAY);
-		__builtin_arc_sr(BIT(2), QM_SS_GPIO_0_BASE +
-					     QM_SS_GPIO_SWPORTA_DR);
+		__builtin_arc_sr(BIT(2),
+				 QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DR);
 		QM_GPIO[0]->gpio_swporta_dr |= BIT(LED_BIT);
 		clk_sys_udelay(DELAY);
-		__builtin_arc_sr(0, QM_SS_GPIO_0_BASE +
-					QM_SS_GPIO_SWPORTA_DR);
+		__builtin_arc_sr(0, QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DR);
 		QM_GPIO[0]->gpio_swporta_dr &= ~BIT(LED_BIT);
 	}
 	/* unmask all SS GPIO interrupts */
-	__builtin_arc_sr(0xff,
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
+	__builtin_arc_sr(0xff, QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
 	if (counter == NUM_LOOPS) {
 		QM_PRINTF("Success\n");
 	} else {
@@ -159,14 +152,13 @@ void ss_sw_controled_interrupt_example(void)
 
 QM_ISR_DECLARE(ss_gpio_interrupt_isr)
 {
-	__builtin_arc_sr(BIT(3),
-			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_PORTA_EOI);
+	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_PORTA_EOI);
 	QM_PRINTF("GPIO isr call No %d.\n", counter++);
 }
 
 QM_ISR_DECLARE(sw_interrupt_isr)
 {
-	/* Disable the sw controled interrupt trigger */
+	/* Disable the sw controlled interrupt trigger */
 	__builtin_arc_sr(0, QM_SS_AUX_IRQ_HINT);
 	QM_PRINTF("sw controlled isr call No_%d\n", counter);
 	counter++;

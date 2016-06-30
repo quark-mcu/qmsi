@@ -31,6 +31,8 @@
 
 #include "../dfu.h"
 #include "dfu_core.h"
+#include "../../qfu/qfu.h"
+#include "../../qdm/qdm.h"
 
 /*
  * NOTE: this implementation of the DFU state machine does not handle the
@@ -142,9 +144,13 @@ int dfu_set_alt_setting(uint8_t alt_setting)
 		return -EIO;
 	}
 	reset_status();
-	/* Activate the handler associated with the selected alt setting */
-	dfu_rh = dfu_cfg->alt_setting_handlers[alt_setting];
-	dfu_rh->init();
+	/*
+	 * Activate the proper handler depending on the selected alt setting:
+	 * - QDM if alt_setting == 0
+	 * - QFU if alt_setting  > 0
+	 */
+	dfu_rh = (alt_setting == 0) ? &qdm_dfu_rh : &qfu_dfu_rh;
+	dfu_rh->init(alt_setting);
 
 	return 0;
 }
@@ -172,8 +178,7 @@ int dfu_detach(uint16_t timeout_ms)
  *
  * @return  0 if no error has occurred, an error code otherwise.
  */
-int dfu_process_dnload(uint16_t block_num, const uint8_t *data,
-			   uint16_t len)
+int dfu_process_dnload(uint16_t block_num, const uint8_t *data, uint16_t len)
 {
 	switch (dfu_state) {
 	case DFU_STATE_DFU_IDLE:
@@ -234,7 +239,7 @@ int dfu_process_dnload(uint16_t block_num, const uint8_t *data,
  * @return  0 if no error has occurred, an error code otherwise.
  */
 int dfu_process_upload(uint16_t block_num, uint16_t req_len, uint8_t *data,
-			   uint16_t *data_len)
+		       uint16_t *data_len)
 {
 	switch (dfu_state) {
 	case DFU_STATE_DFU_IDLE:
@@ -283,7 +288,7 @@ int dfu_process_upload(uint16_t block_num, uint16_t req_len, uint8_t *data,
  * @return  0 if no error has occurred, an error code otherwise.
  */
 int dfu_get_status(dfu_dev_status_t *status, dfu_dev_state_t *state,
-		       uint32_t *poll_timeout_ms)
+		   uint32_t *poll_timeout_ms)
 {
 	switch (dfu_state) {
 	case DFU_STATE_DFU_DNBUSY:
@@ -331,7 +336,7 @@ int dfu_get_status(dfu_dev_status_t *status, dfu_dev_state_t *state,
  */
 int dfu_clr_status()
 {
-	/* we can receive a CLR_STATUS request only if an error has occured */
+	/* we can receive a CLR_STATUS request only if an error has occurred */
 	if (dfu_state != DFU_STATE_DFU_ERROR) {
 		set_err(DFU_STATUS_ERR_STALLEDPKT);
 		return -EIO;

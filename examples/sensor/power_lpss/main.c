@@ -38,27 +38,21 @@
 #include "qm_ss_isr.h"
 #include "qm_rtc.h"
 
-/* SS POWER SOC app example
+/* SS POWER LPSS app example.
  *
- * This application must run in conjunction with its Host counterpart.
+ * This application must run in conjunction with its Host counterpart
+ * located in ./examples/quark_se/power_lpss/.
  * Refer to the host application for the board setup.
  *
  * States executed in this example are:
- * SS2: Processor clock gated, sensor timers off, gateway to LPSS state
  * LPSS: Combination of C2/C2LP (Host state) and SS2
  */
 #define TWO_SEC_AT_32MHZ (0x04000000)
 
 #define PIN_OUT (0)
 
-#define QM_SCSS_GP_SOC_STATE_SLEEP BIT(0)
-#define QM_SCSS_GP_SOC_STATE_DEEP_SLEEP BIT(1)
 #define QM_SCSS_GP_CORE_STATE_C2 BIT(2)
 #define QM_SCSS_GP_CORE_STATE_C2LP BIT(3)
-
-static void timer0_expired(void *data)
-{
-}
 
 static void rtc_example_callback()
 {
@@ -66,51 +60,7 @@ static void rtc_example_callback()
 
 int main(void)
 {
-	qm_ss_timer_config_t ss_timer_cfg;
 	qm_rtc_config_t rtc_cfg;
-	bool sleep_wakeup = false;
-	bool deep_sleep_wakeup = false;
-
-	if (QM_SCSS_GP->gps3 & QM_SCSS_GP_SOC_STATE_SLEEP) {
-		sleep_wakeup = true;
-		QM_SCSS_GP->gps3 &= ~QM_SCSS_GP_SOC_STATE_SLEEP;
-	}
-
-	if (QM_SCSS_GP->gps3 & QM_SCSS_GP_SOC_STATE_DEEP_SLEEP) {
-		/* Clear comparator interrupts. */
-		QM_SCSS_CMP->cmp_stat_clr = -1;
-
-		deep_sleep_wakeup = true;
-		QM_SCSS_GP->gps3 &= ~QM_SCSS_GP_SOC_STATE_DEEP_SLEEP;
-	}
-
-	/*  Initialise Timer configuration. */
-	qm_ss_int_vector_request(QM_SS_INT_TIMER_0, qm_ss_timer_isr_0);
-	qm_ss_irq_unmask(QM_SS_INT_TIMER_0);
-
-	ss_timer_cfg.watchdog_mode = false;
-	ss_timer_cfg.inc_run_only = false;
-	ss_timer_cfg.int_en = true;
-	ss_timer_cfg.count = TWO_SEC_AT_32MHZ;
-	ss_timer_cfg.callback = timer0_expired;
-	ss_timer_cfg.callback_data = NULL;
-
-	if (qm_ss_timer_set_config(QM_SS_TIMER_0, &ss_timer_cfg) != 0) {
-		return -1;
-	}
-
-	if (qm_ss_timer_set(QM_SS_TIMER_0, 0x00000000) != 0) {
-		return -1;
-	}
-
-	/* Go to SS1, Timer will wake me up. */
-	ss_power_cpu_ss1(SS_POWER_CPU_SS1_TIMER_ON);
-
-	/* Disable timer as it won't wake us up from all following states */
-	ss_timer_cfg.int_en = false;
-	if (qm_ss_timer_set_config(QM_SS_TIMER_0, &ss_timer_cfg) != 0) {
-		return -1;
-	}
 
 	/*  Initialise RTC configuration. */
 	rtc_cfg.init_val = 0;
@@ -122,19 +72,12 @@ int main(void)
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
 
-	/* Go to SS1, Timer will wake me up. */
-	ss_power_cpu_ss1(SS_POWER_CPU_SS1_TIMER_OFF);
-
-	/* Set another alarm 4 seconds from now. */
-	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
-				       (QM_RTC_ALARM_SECOND << 2));
-
 	/* Go to SS2, Timer will wake me up. */
 	ss_power_cpu_ss2();
 
 	/* Wait for host to be in C2 before going to LPSS */
-	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_CORE_STATE_C2))
-		;
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_CORE_STATE_C2)) {
+	}
 
 	/* Set another alarm 4 seconds from now. */
 	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
@@ -144,13 +87,12 @@ int main(void)
 	ss_power_cpu_ss2();
 
 	/* Core still in C2 mode */
-
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 
-	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_CORE_STATE_C2LP))
-		;
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_CORE_STATE_C2LP)) {
+	}
 
 	/* Set another alarm 4 seconds from now. */
 	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
@@ -162,13 +104,6 @@ int main(void)
 	ss_power_cpu_ss2();
 
 	/* Core still in C2LP mode */
-
-	if (!sleep_wakeup && !deep_sleep_wakeup) {
-		/* Set another alarm 4 seconds from now. */
-		qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
-					       (QM_RTC_ALARM_SECOND << 2));
-	}
-
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);

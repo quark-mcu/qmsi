@@ -62,12 +62,13 @@
 #define PICO_PRINTF_ESC 1
 #define FORMAT_BUF_SIZE 32
 
-static int pico_putchar(int c)
+static __inline__ int pico_putchar(int c)
 {
 	qm_uart_write(STDOUT_UART, c);
 	return 1;
 }
 
+#if (PICO_PRINTF_D || PICO_PRINTF_U || PICO_PRINTF_X)
 static __inline__ char last_digit_to_char(unsigned int n, int base, bool upcase)
 {
 	char c;
@@ -79,8 +80,7 @@ static __inline__ char last_digit_to_char(unsigned int n, int base, bool upcase)
 	return upcase ? c + ('A' - 10) : c + ('a' - 10);
 }
 
-#if (PICO_PRINTF_D || PICO_PRINTF_U || PICO_PRINTF_X)
-static int putuint(unsigned int n, int base, bool upcase)
+static __inline__ int putuint(unsigned int n, int base, bool upcase)
 {
 	static char format_buf[FORMAT_BUF_SIZE];
 	char *s = format_buf;
@@ -100,7 +100,7 @@ static int putuint(unsigned int n, int base, bool upcase)
 #endif
 
 #if (PICO_PRINTF_S)
-static int pico_puts(const char *s)
+static __inline__ int pico_putchars(const char *s)
 {
 	int len = 0;
 
@@ -111,10 +111,28 @@ static int pico_puts(const char *s)
 }
 #endif
 
-static int pico_vprintf(const char *format, va_list ap)
+/**
+ * @brief This is an minimally useful subset of the POSIX printf() function.
+ *
+ * To reduce code size, this pico_printf() implementation only supports a few
+ * conversion specifiers:
+ *  - @a 'd', @a 'u': for signed and unsigned decimal numbers, respectively;
+ *  - @a 'x', @a 'X': for hexadecimal numbers, downcase and upcase;
+ *  - @a 's': for NULL terminated strings.
+ *
+ * Other limitations:
+ *  - No flag specifier is implemented;
+ *  - No field width specifier is implemented;
+ *  - The only supported length modifier is 'l', which is parsed and ignored,
+ *    on supported archictetures 'int' and 'long int' are both 32 bits long.
+ *  - 32 digits maximum length for formatted numbers.
+ */
+int pico_printf(const char *format, ...)
 {
 	const char *s = format;
 	int len = 0;
+	va_list ap;
+	va_start(ap, format);
 
 	while (*s) {
 		char c = *s++;
@@ -162,7 +180,7 @@ static int pico_vprintf(const char *format, va_list ap)
 			case 's': {
 				const char *str;
 				str = va_arg(ap, const char *);
-				len += pico_puts(str);
+				len += pico_putchars(str);
 				break;
 			}
 #endif
@@ -180,35 +198,8 @@ static int pico_vprintf(const char *format, va_list ap)
 		len += pico_putchar(c);
 	}
 
-	return len;
-}
-
-/**
- * @brief This is an minimally useful subset of the POSIX printf() function.
- *
- * To reduce code size, this printf() implementation only supports a few
- * conversion specifiers:
- *  - @a 'd', @a 'u': for signed and unsigned decimal numbers, respectively;
- *  - @a 'x', @a 'X': for hexadecimal numbers, downcase and upcase;
- *  - @a 's': for NULL terminated strings.
- *
- * Other limitations:
- *  - No flag specifier is implemented;
- *  - No field width specifier is implemented;
- *  - The only supported length modifier is 'l', which is parsed and ignored,
- *    on supported archictetures 'int' and 'long int' are both 32 bits long.
- *  - 32 digits maximum lenght for formatted numbers.
- */
-int printf(const char *format, ...)
-{
-	va_list ap;
-	int r;
-
-	va_start(ap, format);
-	r = pico_vprintf(format, ap);
 	va_end(ap);
-
-	return r;
+	return len;
 }
 
 static qm_uart_config_t stdout_uart_cfg;
@@ -269,7 +260,7 @@ int puts(const char *s)
 /*
  * Custom lightweight implementation that avoids the need for
  * kill/abort/exit/getpid syscalls. It is also optimised for size (no string
- * formatting, targetting UART directly).
+ * formatting, targeting UART directly).
  */
 void __assert_func(const char *file, int line, const char *func,
 		   const char *failedexpr)

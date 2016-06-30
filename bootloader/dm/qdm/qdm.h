@@ -52,7 +52,7 @@
  * This DFU request handler implements such a protocol. It must be associated
  * with DFU alternate setting 0.
  */
-extern dfu_request_handler_t qdm_dfu_rh;
+extern const dfu_request_handler_t qdm_dfu_rh;
 
 /**
  * @}

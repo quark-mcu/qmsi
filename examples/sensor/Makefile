@@ -29,6 +29,18 @@
 
 ### Make all examples makefile
 SUBDIRS := $(filter %/, $(wildcard ./*/))
+SOC ?= quark_se
+TARGET ?= sensor
+
+
+
+ifeq ($(SOC),quark_d2000)
+$(error Supported SOC values are 'quark_se')
+endif
+
+ifeq ($(TARGET),x86)
+$(error Supported TARGET values are 'sensor')
+endif
 
 all clean realclean:: $(SUBDIRS)
 

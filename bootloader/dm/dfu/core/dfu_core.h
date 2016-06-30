@@ -88,8 +88,7 @@ int dfu_detach(uint16_t timeout_ms);
  *
  * @return  0 if no error has occurred, an error code otherwise
  */
-int dfu_process_dnload(uint16_t block_num, const uint8_t *data,
-			   uint16_t len);
+int dfu_process_dnload(uint16_t block_num, const uint8_t *data, uint16_t len);
 
 /**
  * Handle a DFU_UPLOAD request
@@ -107,7 +106,7 @@ int dfu_process_dnload(uint16_t block_num, const uint8_t *data,
  * @return  0 if no error has occurred, an error code otherwise
  */
 int dfu_process_upload(uint16_t block_num, uint16_t max_len, uint8_t *data,
-			   uint16_t *data_len);
+		       uint16_t *data_len);
 
 /**
  * Handle a DFU_GETSTATUS request
@@ -124,7 +123,7 @@ int dfu_process_upload(uint16_t block_num, uint16_t max_len, uint8_t *data,
  * @return  0 if no error has occurred, an error code otherwise
  */
 int dfu_get_status(dfu_dev_status_t *status, dfu_dev_state_t *state,
-		       uint32_t *poll_timeout_ms);
+		   uint32_t *poll_timeout_ms);
 
 /**
  * Handle a DFU_CLRSTATUS request

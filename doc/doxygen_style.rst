@@ -143,6 +143,8 @@ Functions
 Functions guidelines
 ====================
 
+Doxygen comments must include:
+
 * The first line of a function is  the brief for that function.
 * A blank line.
 * The longer description of the function if needed.
@@ -152,6 +154,14 @@ Functions guidelines
 * @return to describe the return value in general.
 * For non-trivial return values (e.g..: status list) A list of possible return
   values using @retval. (on separate lines)
+
+By default, functions are expected to be non-blocking, execute in user context
+and not use any mutual exclusion primitives. If a function deviates from this,
+then the Doxygen comments must also include:
+
+* Blocking or non-blocking behavior.
+* Allowable calling context (e.g. ISR).
+* Mutual exclusion primitives (if used).
 
 Sample function
 ===============

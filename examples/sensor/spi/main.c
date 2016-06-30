@@ -106,7 +106,7 @@ static void spi_transfer_irq(void)
 	irq_trans.tx = tx_buffer;
 	irq_trans.rx_len = BUFFER_SIZE;
 	irq_trans.tx_len = BUFFER_SIZE;
-	irq_trans.data = NULL;
+	irq_trans.callback_data = NULL;
 	irq_trans.callback = spi_cb;
 
 	/* Register interrupts */

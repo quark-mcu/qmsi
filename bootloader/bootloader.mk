@@ -29,4 +29,4 @@
 
 BOOT_DIR = $(BASE_DIR)/bootloader
 
-include $(BOOT_DIR)/clk/clk.mk
+include $(BOOT_DIR)/boot/boot.mk

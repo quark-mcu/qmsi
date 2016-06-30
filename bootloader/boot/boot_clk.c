@@ -55,6 +55,8 @@ uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE_DWORDS];
 #define SYSCLK_8M_FREQ ((8000000 / 2 / 32768) * OSC_TRIM_PERIOD_RTC_TICKS)
 #define SYSCLK_4M_FREQ ((4000000 / 2 / 32768) * OSC_TRIM_PERIOD_RTC_TICKS)
 
+#define AONC_CFG_AONC_CNT_EN BIT(0)
+
 /**
  * Compute the silicon oscillator trim code.
  *
@@ -79,6 +81,9 @@ static int boot_clk_trim_compute(clk_sys_mode_t mode, uint16_t *const trim)
 	const uint32_t ts_desired[] = {
 	    SYSCLK_32M_FREQ, SYSCLK_16M_FREQ, SYSCLK_8M_FREQ, SYSCLK_4M_FREQ,
 	};
+
+	/* Enable AON counter */
+	QM_SCSS_AON[QM_SCSS_AON_0].aonc_cfg |= AONC_CFG_AONC_CNT_EN;
 
 	rc = boot_clk_hyb_set_mode(mode, CLK_SYS_DIV_2);
 	QM_CHECK(rc == 0, rc);

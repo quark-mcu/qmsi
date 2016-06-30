@@ -36,5 +36,9 @@ TARGET ?= x86
 BASE_DIR := ../..
 APP_DIR := .
 
+ifneq ($(SOC),quark_d2000)
+$(error Supported SOC value is 'quark_d2000')
+endif
+
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

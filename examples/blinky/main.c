@@ -27,51 +27,46 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_common.h"
-#include "spinlock.h"
+#include "qm_soc_regs.h"
+#include "qm_gpio.h"
+#include "clk.h"
 
-#if (QUARK_SE)
-/*
- * Spinlock (Peterson algorithm).
- * are used in synchronization between cores that don't have any other means of
- * hardware-based synchronization.
- * NOTE: This Spinlock implementation doesn't solve all system synchronization
- * issues, it has limited applicability and should be used with care. Can only
- * be used to protect critical sections used by both cores.
+/* Blinky app example
+ *
+ * This app will blink a led on the development platform. For Intel(R) Quark(TM)
+ * Microcontroller D2000 Development Platform, make sure to set on the board the
+ * USR/SCK jumper to USR.
  */
 
-extern spinlock_t __esram_lock_start;
+#if (QUARK_SE)
+/* Led on Intel(R) Quark(TM) Microcontroller Quark SE Development Platform. */
+#define LED_BIT 25
+#elif(QUARK_D2000)
+/* LED on Intel(R) Quark(TM) Microcontroller D2000 Development Platform. */
+#define LED_BIT 24
+#endif
 
-#if (QM_SENSOR)
+#define DELAY 300000UL
 
-void spinlock_lock(spinlock_t *lock)
+#define MAX_LED_BLINKS (10)
+
+static qm_gpio_port_config_t cfg;
+
+int main(void)
 {
-	lock->flag[1] = 1;
-	lock->turn = 0;
-	while (lock->flag[0] == 1 && lock->turn == 0) {
-		/* busy wait */
+	uint32_t counter = 0;
+	QM_PUTS("Starting: Blinky\n");
+
+	cfg.direction = BIT(LED_BIT);
+	qm_gpio_set_config(QM_GPIO_0, &cfg);
+
+	while (counter < MAX_LED_BLINKS) {
+		qm_gpio_set_pin(QM_GPIO_0, LED_BIT);
+		clk_sys_udelay(DELAY);
+		qm_gpio_clear_pin(QM_GPIO_0, LED_BIT);
+		clk_sys_udelay(DELAY);
+		counter++;
 	}
+	QM_PUTS("Finished: Blinky\n");
+	return 0;
 }
-void spinlock_unlock(spinlock_t *lock)
-{
-	lock->flag[1] = 0;
-}
-
-#else
-
-void spinlock_lock(spinlock_t *lock)
-{
-	lock->flag[0] = 1;
-	lock->turn = 1;
-	while (lock->flag[1] == 1 && lock->turn == 1) {
-		/* busy wait */
-	}
-}
-void spinlock_unlock(spinlock_t *lock)
-{
-	lock->flag[0] = 0;
-}
-
-#endif /* QM_SENSOR */
-
-#endif /* QUARK_SE */

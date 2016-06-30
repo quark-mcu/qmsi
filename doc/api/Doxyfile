@@ -1941,7 +1941,8 @@ PREDEFINED             = CC_FUNCTION_POINTER_ARGS \
                          UIP_CONF_IPV6_RPL \
                          WITH_LOADER_ARCH \
                          DOXYGEN \
-                         "ASCCMD(name, flags, args)=void CMD_ASCII(name)"
+                         "ASCCMD(name, flags, args)=void CMD_ASCII(name)" \
+                         SOC_WATCH_ENABLED
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The

@@ -30,51 +30,55 @@
 #ifndef __XMODEM_H__
 #define __XMODEM_H__
 
-#include "qm_common.h"
+#include <stdint.h>
+
+/** XMODEM block size */
+#define XMODEM_BLOCK_SIZE (128)
 
 /**
  * @defgroup groupXMODEM XMODEM
  * @{
- *
- **/
+ */
 
 /**
  * Switch XMODEM to receive mode.
  *
- * XMODEM start to send 'C' (NAK-CRC) messages to the sender and waits for
- * incoming transmissions.
- * The received data is copied into the package pointer. If more data are
- * received then the len, an error is returned. The final data length is
- * returned on success.
+ * XMODEM starts to send 'C' (NAK-CRC) messages to the sender and waits for
+ * incoming transmissions. Received data is copied into the provided buffer.
  *
- * The transmission is completed or terminated as soon as the function returns.
+ * This function is blocking and it does not timeout.
  *
- * @param[in] package Data pointer of the received package.
- * @param[in] len Maximum allowed package length.
+ * @param[out] buf      Buffer where to store the received data.
+ * @param[in]  buf_size The size of the buffer.
  *
- * @return Number of Received bytes or -1.
- * @retval -1 Error
- * @retval >0 Receive successful.
+ * @return Number of received bytes or negative error code. Note that XMODEM
+ *         may add up to 127 padding bytes at the end of the real data.
+ * @retval >0 Number of received bytes (including padding).
+ * @retval -1 Error (either the reception failed for an unrecoverable protocol
+ * 	      error or the provided buffer is too small)
  */
-int xmodem_receive_package(uint8_t *package, size_t len);
+int xmodem_receive_package(uint8_t *buf, size_t buf_size);
 
 /**
  * Switch XMODEM to transmit mode.
  *
- * XMODEM waits for 'C' (NAK-CRC) messages until the transmission begins.
- * The package content is sent in 128 bytes frames. The transmission is
- * completed or terminated as soon as the function returns. Extra data is added
- * to the last frame if the package size is not aligned to 128 bytes.
+ * XMODEM waits for 'C' (NAK-CRC) messages until the transmission begins.  The
+ * package content is sent in 128 bytes frames. Extra (padding) data is added
+ * to the last frame if the data size is not multiple of 128 bytes.
  *
- * @param[in] package Data pointer of the package to send.
- * @param[in] len Length of package to send.
+ * This function is blocking, but may timeout.
  *
- * @return Actual written bytes or -1.
- * @retval -1 Transmission failed.
- * @retval >0 Transmission successful.
+ * @param[in] data The data to send.
+ * @param[in] len  The length of the data.
+ *
+ * @return 0 on success, negative error code otherwise.
+ * @retval 0 Success.
+ * @retval -1 Error (timeout or number of retries exceeded).
  */
-int xmodem_transmit_package(uint8_t *package, size_t len);
+int xmodem_transmit_package(uint8_t *data, size_t len);
 
-/** @} */
+/**
+ * @}
+ */
 
 #endif

@@ -28,16 +28,20 @@
  */
 
 #include "qm_common.h"
+#include <stdlib.h>
 
+#define SIZE 100
 /*
  * Very simple application demonstrating the usage of
- * QM_PUTS/QM_PRINTF/QM_ASSERT.
+ * QM_PUTS/QM_PRINTF/QM_ASSERT and malloc.
  * You can enable/modify these settings via CFLAGS.
  */
 
 int main(void)
 {
 	unsigned int cnt;
+	int *p;
+	int i;
 
 	QM_PUTS("Demonstrating QM_PUTS/QM_PRINTF functionality");
 
@@ -45,9 +49,23 @@ int main(void)
 		QM_PRINTF("%d\n", cnt);
 	}
 
+	/* pico_printf only supports %d, %u, %x, %X and %s */
+	pico_printf("pico_printf demo: %d\n", 5);
+
+	/* Full printf has a bigger footprint than pico_printf */
+	printf("printf demo: %.3f\n", 3.14159);
+
 	QM_PUTS("Demonstrating QM_ASSERT functionality");
 
 	QM_ASSERT(1 == 0);
+
+	p = malloc(SIZE * sizeof(int));
+
+	for (i = 0; i < SIZE; i++) {
+		p[i] = i;
+	}
+
+	free(p);
 
 	return 0;
 }

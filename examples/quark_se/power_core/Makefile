@@ -36,5 +36,13 @@ TARGET ?= x86
 BASE_DIR := ../../..
 APP_DIR := .
 
+ifeq ($(TARGET),sensor)
+$(error Supported TARGET values are 'x86')
+endif
+
+ifeq ($(SOC),quark_d2000)
+$(error Supported SOC values are 'quark_se')
+endif
+
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

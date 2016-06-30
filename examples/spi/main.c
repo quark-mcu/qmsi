@@ -60,7 +60,14 @@ static void spi_buff_reset(void);
 static uint8_t tx_buff[BUFFERSIZE];
 static uint8_t rx_buff[BUFFERSIZE];
 
+/* Request data for SPI asynchronous operation (transfer descriptor) needs to
+ * be kept alive during request processing. It is safer when it is globally
+ * accessible within the file - we are sure then that they will be always in the
+ * scope when IRQ will be triggered*/
+static qm_spi_async_transfer_t async_dma_xfer;
+static qm_spi_async_transfer_t async_irq_xfer;
 static volatile bool xfer_done = false;
+static bool compare_tx_rx_buffers = false;
 
 /*  QMSI SPI app example */
 int main(void)
@@ -106,6 +113,7 @@ void spi_polled_mode(void)
 	qm_spi_transfer_t polled_xfer_desc;
 	qm_spi_status_t status;
 	int ret __attribute__((unused));
+	int i;
 
 	QM_PUTS("Synchronous TXRX started");
 
@@ -134,7 +142,7 @@ void spi_polled_mode(void)
 	clk_sys_udelay(WAIT_4SEC);
 
 	/* Compare RX and TX buffers */
-	for (int i = 0; i < BUFFERSIZE; i++) {
+	for (i = 0; i < BUFFERSIZE; i++) {
 		if (tx_buff[i] != rx_buff[i]) {
 			QM_PUTS("ERROR: RX/TX Buffers mismatch!");
 			break;
@@ -149,10 +157,9 @@ void spi_polled_mode(void)
 void spi_irq_mode(void)
 {
 	qm_spi_config_t cfg;
-	qm_spi_async_transfer_t async_xfer_desc;
 	qm_spi_status_t status;
 	int ret __attribute__((unused));
-	bool compare_tx_rx_buffers = false;
+	compare_tx_rx_buffers = false;
 
 	QM_PUTS("IRQ-based TXRX started");
 
@@ -177,13 +184,13 @@ void spi_irq_mode(void)
 	xfer_done = false;
 	compare_tx_rx_buffers = true;
 	/* Set up the async transfer struct. */
-	async_xfer_desc.tx = tx_buff;
-	async_xfer_desc.rx = rx_buff;
-	async_xfer_desc.tx_len = BUFFERSIZE;
-	async_xfer_desc.rx_len = BUFFERSIZE;
-	async_xfer_desc.callback = spi_example_cb;
-	async_xfer_desc.callback_data = &compare_tx_rx_buffers;
-	ret = qm_spi_irq_transfer(QM_SPI_MST_0, &async_xfer_desc);
+	async_irq_xfer.tx = tx_buff;
+	async_irq_xfer.rx = rx_buff;
+	async_irq_xfer.tx_len = BUFFERSIZE;
+	async_irq_xfer.rx_len = BUFFERSIZE;
+	async_irq_xfer.callback = spi_example_cb;
+	async_irq_xfer.callback_data = &compare_tx_rx_buffers;
+	ret = qm_spi_irq_transfer(QM_SPI_MST_0, &async_irq_xfer);
 	QM_ASSERT(0 == ret);
 
 	while (false == xfer_done) {
@@ -195,10 +202,9 @@ void spi_irq_mode(void)
 void spi_dma_mode(void)
 {
 	qm_spi_config_t cfg;
-	qm_spi_async_transfer_t async_xfer_desc;
 	qm_spi_status_t status;
 	int ret __attribute__((unused));
-	bool compare_tx_rx_buffers = false;
+	compare_tx_rx_buffers = false;
 
 	/* Register the DMA interrupts. */
 	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
@@ -239,13 +245,13 @@ void spi_dma_mode(void)
 	xfer_done = false;
 	compare_tx_rx_buffers = false;
 	/* Set up the async transfer struct. */
-	async_xfer_desc.tx = tx_buff;
-	async_xfer_desc.tx_len = BUFFERSIZE;
-	async_xfer_desc.rx = NULL;
-	async_xfer_desc.rx_len = 0;
-	async_xfer_desc.callback = spi_example_cb;
-	async_xfer_desc.callback_data = &compare_tx_rx_buffers;
-	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_xfer_desc);
+	async_dma_xfer.tx = tx_buff;
+	async_dma_xfer.tx_len = BUFFERSIZE;
+	async_dma_xfer.rx = NULL;
+	async_dma_xfer.rx_len = 0;
+	async_dma_xfer.callback = spi_example_cb;
+	async_dma_xfer.callback_data = &compare_tx_rx_buffers;
+	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_dma_xfer);
 	QM_ASSERT(0 == ret);
 
 	while (false == xfer_done) {
@@ -265,13 +271,13 @@ void spi_dma_mode(void)
 	xfer_done = false;
 	compare_tx_rx_buffers = false;
 	/* Set up the async transfer struct. */
-	async_xfer_desc.tx = NULL;
-	async_xfer_desc.tx_len = 0;
-	async_xfer_desc.rx = rx_buff;
-	async_xfer_desc.rx_len = BUFFERSIZE;
-	async_xfer_desc.callback = spi_example_cb;
-	async_xfer_desc.callback_data = &compare_tx_rx_buffers;
-	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_xfer_desc);
+	async_dma_xfer.tx = NULL;
+	async_dma_xfer.tx_len = 0;
+	async_dma_xfer.rx = rx_buff;
+	async_dma_xfer.rx_len = BUFFERSIZE;
+	async_dma_xfer.callback = spi_example_cb;
+	async_dma_xfer.callback_data = &compare_tx_rx_buffers;
+	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_dma_xfer);
 	QM_ASSERT(0 == ret);
 
 	while (false == xfer_done) {
@@ -291,13 +297,13 @@ void spi_dma_mode(void)
 	xfer_done = false;
 	compare_tx_rx_buffers = true;
 	/* Set up the async transfer struct. */
-	async_xfer_desc.tx = tx_buff;
-	async_xfer_desc.tx_len = BUFFERSIZE;
-	async_xfer_desc.rx = rx_buff;
-	async_xfer_desc.rx_len = BUFFERSIZE;
-	async_xfer_desc.callback = spi_example_cb;
-	async_xfer_desc.callback_data = &compare_tx_rx_buffers;
-	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_xfer_desc);
+	async_dma_xfer.tx = tx_buff;
+	async_dma_xfer.tx_len = BUFFERSIZE;
+	async_dma_xfer.rx = rx_buff;
+	async_dma_xfer.rx_len = BUFFERSIZE;
+	async_dma_xfer.callback = spi_example_cb;
+	async_dma_xfer.callback_data = &compare_tx_rx_buffers;
+	ret = qm_spi_dma_transfer(QM_SPI_MST_0, &async_dma_xfer);
 	QM_ASSERT(0 == ret);
 
 	while (false == xfer_done) {
@@ -322,7 +328,8 @@ static void spi_config(const qm_spi_config_t *cfg_p)
 
 static void spi_buff_reset(void)
 {
-	for (int i = 0; i < BUFFERSIZE; i++) {
+	int i;
+	for (i = 0; i < BUFFERSIZE; i++) {
 		tx_buff[i] = i;
 		rx_buff[i] = 0xf0;
 	}
@@ -331,14 +338,14 @@ static void spi_buff_reset(void)
 static void spi_example_cb(void *data, int err, qm_spi_status_t status,
 			   uint16_t len)
 {
-	bool compare_tx_rx_buffers = *(bool *)data;
+	int i;
+	bool compare = *(bool *)data;
 	xfer_done = true;
 
 	if (!err && len == BUFFERSIZE) {
 		QM_PUTS("SPI XFER COMPLETED");
 		/* Compare RX and TX buffers */
-		for (int i = 0; compare_tx_rx_buffers && (i < BUFFERSIZE);
-		     i++) {
+		for (i = 0; compare && (i < BUFFERSIZE); i++) {
 			if (tx_buff[i] != rx_buff[i]) {
 				QM_PUTS("ERROR: RX/TX Buffers mismatch!");
 			} else if (i == BUFFERSIZE - 1) {

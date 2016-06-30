@@ -95,7 +95,7 @@ int main(void)
 	xfer.samples_len = NUM_SAMPLES_POLLED;
 
 	/* Run the conversion. */
-	if (qm_adc_convert(QM_ADC_0, &xfer)) {
+	if (qm_adc_convert(QM_ADC_0, &xfer, NULL)) {
 		QM_PUTS("Error: qm_adc_convert failed");
 		return 1;
 	}

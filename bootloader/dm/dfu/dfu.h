@@ -153,8 +153,14 @@ typedef enum {
 typedef struct {
 	/**
 	 * Initialize the DFU Request Handler.
+	 *
+	 * This function is called when a DFU alternate setting associated with
+	 * the handler is selected.
+	 *
+	 * @param[in] alt_setting The specific alternate setting activating this
+	 * 			  handler.
 	 */
-	void (*init)(void);
+	void (*init)(uint8_t alt_setting);
 	/**
 	 * Get the processing status of the last DNLOAD block.
 	 *
@@ -242,14 +248,6 @@ typedef struct {
 	uint16_t dfu_version;     /**< DFU Version (as BCD). */
 	uint8_t dfu_attributes;   /**< DFU attributes (bitfield). */
 	uint8_t num_alt_settings; /**< Number of alternate settings. */
-
-	/* Not exposed */
-	/**
-	* An array of DFU request handlers. We must have an handler for each
-	* alternate setting (i.e., the length of the array must be equal to
-	* num_alt_settings).
-	*/
-	dfu_request_handler_t *alt_setting_handlers[];
 } dfu_cfg_t;
 
 #endif /* __DFU_H__ */

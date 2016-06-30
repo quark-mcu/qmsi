@@ -52,7 +52,7 @@
  * (i.e., every available alternate setting except alternate setting 0, which
  * is reserved for the QDM protocol).
  */
-extern dfu_request_handler_t qfu_dfu_rh;
+extern const dfu_request_handler_t qfu_dfu_rh;
 
 /**
  * @}

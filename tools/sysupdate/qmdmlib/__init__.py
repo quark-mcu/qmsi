@@ -52,5 +52,7 @@ Example usage::
 """
 
 from qmdmlib.qfu import QFUHeader, QFUImage, QFUException
+from qmdmlib.dfu import DFUImage, DFUException
+from qmdmlib.qdm import QDMRequest, QDMResponse, QDMSysInfo, QDMException
 
-__version__ = "0.1"
+__version__ = "1.1"
