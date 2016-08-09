@@ -34,6 +34,7 @@
 #include "qm_pinmux.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
+#include "qm_gpio.h"
 #include "vreg.h"
 #include "clk.h"
 
@@ -44,7 +45,7 @@
  * RTC is not required but this is done to showcase comparator
  * wake up when in deep sleep mode.
  *
- * On Atlas Hills, this pin is located on header P3 PIN 20.
+ * On the Quark SE development platform this pin is found on header J13 PIN 20.
  *
  * Wake up from SoC sleep and SoC deep sleep states result
  * in a processor core reset.
@@ -65,7 +66,11 @@
  *               peripherals off except Always On.
  * 	         Wake up from reset vector.
  */
+
 #define WAKEUP_COMPARATOR_PIN (13)
+#define QM_AC_COMPARATORS_MASK (0x7FFFF)
+
+#define PIN_CMP_READY (4)
 
 #define PIN_OUT (0)
 #define PIN_INTR (3)
@@ -75,6 +80,8 @@
 #define QM_SCSS_GP_SOC_STATE_ADVANCED_SLEEP BIT(2)
 
 #define RTC_SYNC_CLK_COUNT (5)
+
+static void aon_gpio_callback(void *, uint32_t);
 
 static void setup_aon_comparator(void)
 {
@@ -86,6 +93,10 @@ static void setup_aon_comparator(void)
 	qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_1);
 	qm_pmux_input_en(QM_PIN_ID_13, true);
 
+	/* Clear all comparator pending interrupts */
+	QM_SCSS_CMP->cmp_pwr = 0;
+	QM_SCSS_CMP->cmp_stat_clr = QM_AC_COMPARATORS_MASK;
+
 	ac_cfg.reference =
 	    BIT(WAKEUP_COMPARATOR_PIN); /* Ref internal voltage */
 	ac_cfg.polarity = 0x0; /* Fire if greater than ref (high level) */
@@ -96,8 +107,34 @@ static void setup_aon_comparator(void)
 	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
 }
 
+static void wait_for_comparator_to_ground(void)
+{
+	volatile bool comparator_ready = false;
+	qm_gpio_port_config_t cfg;
+
+	/* Request IRQ and write GPIO port config */
+	cfg.direction = 0;			/* All pins are input */
+	cfg.int_en = BIT(PIN_CMP_READY);	/* Interrupt enabled */
+	cfg.int_type = BIT(PIN_CMP_READY);      /* Edge sensitive interrupt */
+	cfg.int_polarity = ~BIT(PIN_CMP_READY); /* Falling edge */
+	cfg.int_debounce = BIT(PIN_CMP_READY);  /* Debounce enabled */
+	cfg.int_bothedge = 0x0;			/* Both edge disabled */
+	cfg.callback = aon_gpio_callback;
+	cfg.callback_data = (void *)&comparator_ready;
+
+	qm_irq_request(QM_IRQ_AONGPIO_0, qm_aon_gpio_isr_0);
+
+	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
+
+	QM_PUTS("Set comparator pin to Ground and press PB0 when ready.");
+
+	while (comparator_ready == false) {
+	}
+}
+
 int main(void)
 {
+
 	qm_rtc_config_t rtc_cfg;
 	bool start = false;
 	bool sleep_wakeup = false;
@@ -119,9 +156,6 @@ int main(void)
 
 	/* Reset state in GPS2. */
 	QM_SCSS_GP->gps2 = 0;
-
-	QM_PUTS("Waiting for user to set comparator pin to Ground.");
-	clk_sys_udelay(2000000);
 
 	if (start) {
 		/*  Initialise RTC configuration. */
@@ -157,6 +191,8 @@ int main(void)
 		/* Not reachable. We will wake up from reset. */
 		QM_PUTS("Error: reached unreachable code.");
 	} else if (sleep_wakeup) {
+		wait_for_comparator_to_ground();
+
 		setup_aon_comparator();
 
 		QM_PUTS("Go to deep sleep. Trigger comparator to wake up.");
@@ -170,6 +206,8 @@ int main(void)
 		/* Not reachable. We will wake out from reset. */
 		QM_PUTS("Error: reached unreachable code.");
 	} else if (deep_sleep_wakeup) {
+		wait_for_comparator_to_ground();
+
 		setup_aon_comparator();
 
 		QM_PUTS("Go to deep sleep. Trigger comparator to wake up.");
@@ -202,4 +240,10 @@ int main(void)
 	QM_PUTS("Finished: Power SoC example.");
 
 	return 0;
+}
+
+void aon_gpio_callback(void *data, uint32_t status)
+{
+	volatile bool *comparator_ready = (volatile bool *)data;
+	*comparator_ready = true;
 }

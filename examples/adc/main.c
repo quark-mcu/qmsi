@@ -39,8 +39,8 @@
  * 8 and 9 to 3.3v and GND. The sequence table will read the values of these
  * pins alternatively.
  *
- * On Mint Field ADC pins 8 and 9 and marked 7 and 8 on headers J4 and J3
- * respectively. GND and 3.3v are located on header J21.
+ * On the Quark D2000 development platform, ADC pins 8 and 9 and marked 7 and 8
+ * on headers J4 and J3 respectively. GND and 3.3v are located on header J21.
  */
 
 #define NUM_CHANNELS (2)

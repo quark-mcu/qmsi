@@ -98,6 +98,11 @@ help:
 	$(info )
 	$(info List of supported values for SOC: $(SUPPORTED_SOCS))
 	$(info List of supported values for CSTD: c90 and c99)
+	$(info )
+	$(info To disable starting ARC on Quark SE, compile the ROM with the)
+	$(info following:)
+	$(info START_ARC=0)
+	$(info By default, START_ARC=1)
 
 all: $(RULES)
 

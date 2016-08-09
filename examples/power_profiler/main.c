@@ -62,10 +62,6 @@ int rtc_tick = 0;
 #define ENTER_C2() power_soc_sleep()
 #define ENTER_C2LP() power_soc_deep_sleep()
 #elif(QUARK_SE)
-/* Yes, these definitions should come from power.h.
- * In my local build, they do.  However, Jenkins can't seem
- * to find them.  As such, we duplicate their headers here.  Sigh.
- */
 void power_cpu_c1(void);
 void power_cpu_c2(void);
 void power_cpu_c2lp(void);

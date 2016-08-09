@@ -43,6 +43,11 @@ volatile uint32_t wdt_fired;
  *
  * In this example, we operate in the second mode and reload the WDT every time
  * an interrupt is generated, this way the SoC does not reset.
+ *
+ * Note: on Quark SE, the WDT will automatically pause if the x86 core is in the
+ * C2 state. As a result the WDT will not fire or generate interrupts. If
+ * using the sensor subsystem, it is advised to use one of the supplied timers
+ * to act as a watchdog.
  */
 
 #define MAX_WDT_FIRINGS (10)

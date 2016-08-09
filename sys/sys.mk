@@ -28,15 +28,19 @@
 #
 
 ### Variables
+ifeq ($(ITA_SUBOBJ),)
+ITA_SUBOBJ = "."
+endif
+
 SYS_DIR = $(BASE_DIR)/sys
 OBJ_DIRS += $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)
 SYS_SOURCES = $(wildcard $(SYS_DIR)/*.c)
-OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(SYS_SOURCES:.c=.o)))
+OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/$(ITA_SUBOBJ)/,$(notdir $(SYS_SOURCES:.c=.o)))
 GENERATED_DIRS += $(SYS_DIR)/$(BUILD)
 
 ### Build C files
-$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(SYS_DIR)/%.c
-	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
+$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/$(ITA_SUBOBJ)/%.o: $(SYS_DIR)/%.c
+	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/$(ITA_SUBOBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 ifeq ($(TARGET), sensor)

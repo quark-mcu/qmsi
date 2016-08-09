@@ -45,23 +45,21 @@
 #endif
 #define DM_CONFIG_UART_BAUD_DIV (BOOTROM_UART_115200)
 
-/*
- * Low-Power Comparator (LPC) for DM requests.
- */
-
-/* NOTE: the LPC selection is yet to be agreed, the below may change. */
-
+/* GPIO pin for DM requests. */
 #if (QUARK_SE)
-/* Mount Atlas pin J14.47*/
-#define DM_CONFIG_LPC (7)
-#define DM_CONFIG_LPC_PIN_ID (QM_PIN_ID_7)
-#define DM_CONFIG_LPC_PIN_FN (QM_PMUX_FN_1)
+/*
+ * Intel(R) Quark(TM) Microcontroller SE Development Platform Button 0 / Pin
+ * J14.43 (AON GPIO 4).
+ */
+#define DM_CONFIG_GPIO_PORT (QM_AON_GPIO_0)
+#define DM_CONFIG_GPIO_PIN (4)
 #elif(QUARK_D2000)
-/* Intel(R) Quark(TM) Microcontroller D2000 Development Platform pin IO8
- * (J4.8). */
-#define DM_CONFIG_LPC (9)
-#define DM_CONFIG_LPC_PIN_ID (QM_PIN_ID_9)
-#define DM_CONFIG_LPC_PIN_FN (QM_PMUX_FN_1)
+/*
+ * Intel(R) Quark(TM) Microcontroller D2000 Development Platform Button 0 / Pin
+ * J4.5 (GPIO 2).
+ */
+#define DM_CONFIG_GPIO_PORT (QM_GPIO_0)
+#define DM_CONFIG_GPIO_PIN (2)
 #endif
 
 #endif /* __DM_CONFIG_H__ */

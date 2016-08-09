@@ -130,6 +130,7 @@ static void qfu_handle_hdr(const uint8_t *data, uint32_t len)
 {
 	DBG_PRINTF("handle_qfu_hdr(): len = %u\n", len);
 	qfu_hdr_t *hdr;
+	uint32_t extra_blocks;
 
 	hdr = (qfu_hdr_t *)data;
 	if (len < sizeof(qfu_hdr_t) || hdr->partition != active_alt_setting) {
@@ -141,6 +142,13 @@ static void qfu_handle_hdr(const uint8_t *data, uint32_t len)
 	if (hdr->block_sz != QM_FLASH_PAGE_SIZE_BYTES) {
 		DBG_PRINTF("Block size error: %d\n", hdr->block_sz);
 		qfu_err_status = DFU_STATUS_ERR_VENDOR;
+		return;
+	}
+	/* If no auth, then we just have 1 header block (this one) */
+	extra_blocks = (hdr->cipher == QFU_AUTH_NONE) ? 1 : 2;
+	/* Image size cannot be bigger than the partition size */
+	if ((hdr->n_blocks) > (part->num_pages + extra_blocks)) {
+		qfu_err_status = DFU_STATUS_ERR_ADDRESS;
 		return;
 	}
 	/* Store header in RAM */

@@ -27,19 +27,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "power_states.h"
-#include "qm_common.h"
-#include "qm_interrupt.h"
-#include "qm_gpio.h"
-#include "qm_pinmux.h"
-#include "qm_isr.h"
-
-/* POWER LPSS app example.
+/*
+ * Low Power Sensing Standby (LPSS) State example.
  *
  * This application must run in conjonction with its Sensor Subsystem
  * counterpart located in /examples/sensor/power_lpss/.
  *
- * This app requires a board to be set up with a jumper cable connecting the
+ * This app requires an Intel(R) Quark(TM) SE development platform
+ * to be set up with a jumper cable connecting the
  * pins listed below so the output pin can trigger an interrupt on the
  * input pin. PIN_OUT will be configured as an output pin and PIN_INTR will be
  * configured as an input pin with interrupts enabled.
@@ -47,7 +42,12 @@
  * running on the Sensor Subsystem to initiate a state transition
  * on the host core.
  *
- * On Atlas Hills, PIN_OUT and PIN_INTR are located on header P4 PIN 42 and 40.
+ * The Sensor Subsystem will wake up from LPSS into SS0.
+ * The x86 core will remain in C2/C2LP and the sensor subsystem
+ * will trigger an interrupt via GPIO to make it transition to C0.
+ *
+ * On Intel(R) Quark(TM) SE development platform, PIN_OUT and PIN_INTR
+ * are located on header J15 PIN 42 and 40.
  *
  * Sensor collaboration is needed as LPSS can only be achieved
  * as a combination of the two cores states.
@@ -56,12 +56,16 @@
  * LPSS: Combination of C2/C2LP and SS2 (Sensor state)
  */
 
+#include "power_states.h"
+#include "qm_common.h"
+#include "qm_gpio.h"
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_pinmux.h"
+
 #define PIN_OUT (0)
 #define PIN_INTR (3)
-#define QM_SCSS_GP_CORE_STATE_C2 BIT(2)
-#define QM_SCSS_GP_CORE_STATE_C2LP BIT(3)
-
-static void gpio_example_callback(void *, uint32_t);
+#define QM_SCSS_GP_SENSOR_READY BIT(2)
 
 int main(void)
 {
@@ -69,59 +73,55 @@ int main(void)
 
 	QM_PUTS("Starting: Power LPSS example.");
 
-	/* Set GPIO pin muxing */
+	/* Set GPIO pin muxing. */
 	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
 	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
 
 	/*
-	 * Demonstrating entering and exiting LPSS mode.
-	 * The Sensor Subsystem will wake from LPSS into SS0.
-	 * As the Host is in C2 at that moment, the sensor subsystem
-	 * will trigger an interrupt into the Host via GPIO.
-	 *
-	 * Request IRQ and write GPIO port config
+	 * Request IRQ and write GPIO port config.
 	 */
-	cfg.direction = BIT(PIN_OUT);
-	cfg.int_en = BIT(PIN_INTR);       /* Interrupt enabled */
-	cfg.int_type = BIT(PIN_INTR);     /* Edge sensitive interrupt */
-	cfg.int_polarity = BIT(PIN_INTR); /* Rising edge */
-	cfg.int_debounce = BIT(PIN_INTR); /* Debounce enabled */
-	cfg.int_bothedge = 0x0;		  /* Both edge disabled */
-	cfg.callback = gpio_example_callback;
+	cfg.direction = BIT(PIN_OUT);     /* Set PIN_OUT as output. */
+	cfg.int_en = BIT(PIN_INTR);       /* Interrupt enabled. */
+	cfg.int_type = BIT(PIN_INTR);     /* Edge sensitive interrupt. */
+	cfg.int_polarity = BIT(PIN_INTR); /* Rising edge. */
+	cfg.int_debounce = BIT(PIN_INTR); /* Debounce enabled. */
+	cfg.int_bothedge = 0x0;		  /* Both edge disabled. */
+	cfg.callback = NULL;
 	cfg.callback_data = NULL;
 
 	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
 
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 
-	QM_PUTS("Go to c2. Sensor in SS2. Enable LPSS");
-	/* Enable LPSS */
-	power_soc_lpss_enable();
-	/* Tell sensor we are ready for LPSS mode */
-	QM_SCSS_GP->gps2 |= QM_SCSS_GP_CORE_STATE_C2;
-	/* Go to LPSS. Sensor will make me transition to C2 and wake me up */
+	QM_PUTS("Go to LPSS with x86 core in C2.");
+
+	/* Wait for host to be in C2 before going to LPSS. */
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY)) {
+	}
+
+	/*
+	 * Go to C2. Sensor Subsystem will perform the transition to LPSS.
+	 * Once woken up, SS will wake up the x86 core with the GPIO interrupt.
+	 */
 	power_cpu_c2();
-	/* Clear flag */
-	QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_CORE_STATE_C2;
+
 	QM_PUTS("Wake up from LPSS.");
 
-	QM_PUTS("Go to c2lp. Sensor in SS2. Enable LPSS");
-	/* Enable LPSS */
-	power_soc_lpss_enable();
-	/* Tell sensor we are ready for LPSS mode */
-	QM_SCSS_GP->gps2 |= QM_SCSS_GP_CORE_STATE_C2LP;
-	/* Go to C2LP. Sensor will make me transition to LPSS and wake me up */
+	QM_PUTS("Go to LPSS with x86 core in C2LP.");
+
+	/* Wait for the Sensor Subsystem to be ready to transition to LPSS. */
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY)) {
+	}
+
+	/*
+	 * Go to C2LP. Sensor Subsystem will perform the transition to LPSS.
+	 * Once woken up, SS will wake up the x86 core with the GPIO interrupt.
+	 */
 	power_cpu_c2lp();
-	/* Clear flag */
-	QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_CORE_STATE_C2LP;
+
 	QM_PUTS("Wake up from LPSS.");
 
 	QM_PUTS("Finished: Power LPSS example.");
 
 	return 0;
-}
-
-void gpio_example_callback(void *data, uint32_t status)
-{
-	QM_PUTS("GPIO interrupt triggered");
 }

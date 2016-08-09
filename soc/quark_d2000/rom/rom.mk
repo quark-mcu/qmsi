@@ -55,6 +55,8 @@ STARTUP_OBJS += $(DM_OBJS)
 # NOTE: '-Wno-unused-parameter' added to make DM module compile; to be removed
 # once the root cause is fixed
 CFLAGS += -Wno-unused-parameter -DSYSTEM_UPDATE_ENABLE=1
+# Override ROM file-name: append '_dm' suffix
+ROM := $(ROM_BUILD_DIR)/quark_d2000_rom_dm.bin
 endif
 
 ifneq ($(RTOS),)

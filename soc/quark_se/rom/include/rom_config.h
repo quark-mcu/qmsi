@@ -30,7 +30,7 @@
 #ifndef __ROM_CONFIG_H__
 #define __ROM_CONFIG_H__
 
-/**
+/*
  * SoC pin for JTAG probing.
  *
  * On Quark SE Development Board, this is the IO2 pin on header P3 pin 28.

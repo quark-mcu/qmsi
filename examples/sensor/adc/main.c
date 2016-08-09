@@ -43,9 +43,9 @@
  * 10 and 11 to 3.3v and GND. The sequence table will read the value of these
  * pins alternatively.
  *
- * On Atlas Hills ADC pins 10 and 11 are located on header P3 at pins 14 and 16
- * respectively. GND and 3.3v are all located on the same header at pins 12 and
- * 2 respectively.
+ * On the Quark SE development platform ADC pins 10 and 11 are located on header
+ * J14 at pins 14 and 16 respectively. GND and 3.3v are all located on the same
+ * header at pins 12 and 2 respectively.
  */
 
 #define NUM_CHANNELS (2)

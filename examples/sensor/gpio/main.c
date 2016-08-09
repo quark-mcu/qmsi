@@ -46,8 +46,8 @@
  * input pin. PIN_OUT will be configured as an output pin and PIN_INTR will
  * be configured as an input pin with interrupts enabled.
  *
- * On Atlas Hills, PIN_OUT (P3 header, PIN 14) and PIN_INTR (P3 header,
- * PIN 16).
+ * On the Quark SE development platform, PIN_OUT (J15 header, PIN 36) and
+ * PIN_INTR (J15 header, PIN 42).
  */
 #define PIN_OUT 2
 #define PIN_INTR 3

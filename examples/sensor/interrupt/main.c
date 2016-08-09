@@ -46,8 +46,8 @@
  *    pins listed below so the output pin can trigger an interrupt on the
  *    input pin. PIN_OUT will be configured as an output pin and PIN_INTR will
  *    be configured as an input pin with interrupts enabled.
- *    On Atlas Hills, PIN_OUT and PIN_INTR are located on header P3 PIN 14
- *    and 16.
+ *    On the Quark SE development platform, PIN_OUT and PIN_INTR are located on
+ *    header J15, PIN 36 and 42 respectively.
  *
  * 2. SW driven common interrupt APP - interrupt handling requested same APP
  *    as LMT interrupt handling request:
@@ -58,7 +58,7 @@
 #define PIN_OUT (2)
 #define PIN_INTR (3)
 
-#define LED_BIT (25) /* Led on Atlas Hills board */
+#define LED_BIT (25) /* Led on Quark SE development platform. */
 
 #define DELAY (300000)
 #define NUM_LOOPS (5)

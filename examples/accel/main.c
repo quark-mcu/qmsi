@@ -28,69 +28,87 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <unistd.h>
+/*
+ * QMSI Accelerometer app example.
+ *
+ * This app will read the accelerometer data from the onboard BMC150/160 sensor
+ * and print it to the console every 125 milliseconds. The app will complete
+ * once it has read 500 samples.
+ *
+ * If the app is compiled with the Intel(R) Integrated Performance Primitives
+ * (IPP) library enabled, it will also print the Root Mean Square (RMS),
+ * variance and mean of the last 15 samples each time.
+ */
 
+#include <unistd.h>
 #if (__IPP_ENABLED__)
 #include <dsp.h>
 #endif
-
+#include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_isr.h"
 #include "qm_rtc.h"
 #include "qm_uart.h"
-#include "qm_isr.h"
-
 #include "bmx1xx/bmx1xx.h"
 
-#define ALARM (QM_RTC_ALARM_SECOND >> 3)
+#define INTERVAL (QM_RTC_ALARM_SECOND >> 3) /* 125 milliseconds. */
+#define NUM_SAMPLES (500)
+#if (__IPP_ENABLED__)
+/* Number of samples to use to generate the statistics from. */
+#define SAMPLES_SIZE (15)
+#endif /* __IPP_ENABLED__ */
 
-#define SAMPLING_DURATION 500
-static uint16_t cb_count = 0;
+static volatile uint32_t cb_count = 0;
+static volatile bool complete = false;
 
 #if (__IPP_ENABLED__)
-#define SAMPLES_SIZE 15
-
 static float32_t samples[SAMPLES_SIZE];
 
 static void print_axis_stats(int16_t value)
 {
-	static uint16_t index = 0;
-	static uint16_t count = 0;
+	static uint32_t index = 0;
+	static uint32_t count = 0;
 	float32_t mean, var, rms;
 
+	/* Overwrite the oldest sample in the array. */
 	samples[index] = value;
+	/* Move the index on the next position, wrap around if necessary. */
 	index = (index + 1) % SAMPLES_SIZE;
 
+	/* Store number of samples until it reaches SAMPLES_SIZE. */
 	count = count == SAMPLES_SIZE ? SAMPLES_SIZE : count + 1;
 
+	/* Get the root mean square (RMS), variance and mean. */
 	ippsq_rms_f32(samples, count, &rms);
 	ippsq_var_f32(samples, count, &var);
 	ippsq_mean_f32(samples, count, &mean);
 
 	QM_PRINTF("rms %d var %d mean %d\n", (int)rms, (int)var, (int)mean);
 }
-#endif
+#endif /* __IPP_ENABLE__ */
 
-static void print_accel_callback(void *data)
+/* Accel callback will run every time the RTC alarm triggers. */
+static void accel_callback(void *data)
 {
 	bmx1xx_accel_t accel = {0};
-	int rc;
 
-	rc = bmx1xx_read_accel(&accel);
-	if (rc == 0) {
+	if (0 == bmx1xx_read_accel(&accel)) {
 		QM_PRINTF("x %d y %d z %d\n", accel.x, accel.y, accel.z);
 	} else {
-		QM_PRINTF("Error reading data from sensor.\n");
+		QM_PUTS("Error: unable to read from sensor");
 	}
 
 #if (__IPP_ENABLED__)
 	print_axis_stats(accel.z);
-#endif
+#endif /* __IPP_ENABLE__ */
 
-	if (cb_count < SAMPLING_DURATION) {
-		qm_rtc_set_alarm(QM_RTC_0, (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM));
+	/* Reset the RTC alarm to fire again if necessary. */
+	if (cb_count < NUM_SAMPLES) {
+		qm_rtc_set_alarm(QM_RTC_0,
+				 (QM_RTC[QM_RTC_0].rtc_ccvr + INTERVAL));
 		cb_count++;
 	} else {
-		QM_PUTS("Finished: Accelerometer example app\n");
+		complete = true;
 	}
 }
 
@@ -99,32 +117,42 @@ int main(void)
 	qm_rtc_config_t rtc;
 	bmx1xx_setup_config_t cfg;
 
-	QM_PUTS("Starting: Accelerometer example app\n");
+	QM_PUTS("Starting: Accelerometer example app");
 
+	/* Configure the RTC and request the IRQ. */
 	rtc.init_val = 0;
 	rtc.alarm_en = true;
-	rtc.alarm_val = ALARM;
-	rtc.callback = print_accel_callback;
+	rtc.alarm_val = INTERVAL;
+	rtc.callback = accel_callback;
 	rtc.callback_data = NULL;
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
 
+	/* Enable the RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
 
 #if (QUARK_D2000)
 	cfg.pos = BMC150_J14_POS_0;
-#endif
+#endif /* QUARK_D2000 */
 
+	/* Initialise the sensor config and set the mode. */
 	bmx1xx_init(cfg);
-
 	bmx1xx_accel_set_mode(BMX1XX_MODE_2G);
 
 #if (BMC150_SENSOR)
-	bmx1xx_set_bandwidth(BMC150_BANDWIDTH_64MS);
+	bmx1xx_set_bandwidth(BMC150_BANDWIDTH_64MS); /* Set the bandwidth. */
 #elif(BMI160_SENSOR)
-	bmx1xx_set_bandwidth(BMI160_BANDWIDTH_10MS);
-#endif
+	bmx1xx_set_bandwidth(BMI160_BANDWIDTH_10MS); /* Set the bandwidth. */
+#endif /* BMC150_SENSOR */
+
+	/* Start the RTC. */
 	qm_rtc_set_config(QM_RTC_0, &rtc);
+
+	/* Wait for the correct number of samples to be read. */
+	while (!complete)
+		;
+
+	QM_PUTS("Finished: Accelerometer example app");
 
 	return 0;
 }

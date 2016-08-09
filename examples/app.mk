@@ -76,13 +76,17 @@ QFU_GEN_0 = python $(BASE_DIR)/tools/sysupdate/qm_make_dfu.py
 QFU_GEN_1 = $(QFU_GEN_0) -v
 QFU_GEN = $(QFU_GEN_$(V))
 
+DM_MANAGE_ERASE_0 = python $(BASE_DIR)/tools/sysupdate/qm_manage.py erase
+DM_MANAGE_ERASE_1 = $(DM_MANAGE_ERASE_0) -v
+DM_MANAGE_ERASE = $(DM_MANAGE_ERASE_$(V))
+
 ifeq ($(TARGET), sensor)
 QFU_PARTITION = 2
 else
 QFU_PARTITION = 1
 endif
 
-### Mount Atlas and Atlas Hills are capable of
+### The Quark SE development platform is capable of
 ### routing UART_1 to a dual FTDI JTAG/UART chip.
 ### This is the default stdio option for Quark SE.
 ifeq ($(SOC), quark_se)
@@ -124,3 +128,9 @@ ifeq ($(SERIAL_PORT), )
 	$(error Target flash requires SERIAL_PORT to be set)
 endif
 	dfu-util-qda -D $(QFU) -p $(SERIAL_PORT) -R -a $(QFU_PARTITION)
+
+erase:
+ifeq ($(SERIAL_PORT), )
+	$(error Target erase requires SERIAL_PORT to be set)
+endif
+	$(DM_MANAGE_ERASE) -p $(SERIAL_PORT)

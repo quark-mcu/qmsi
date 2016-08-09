@@ -30,7 +30,7 @@
 #include <string.h>
 
 #include "qm_soc_regs.h"
-#include "qm_comparator.h"
+#include "qm_gpio.h"
 #include "qm_flash.h"
 #include "qm_init.h"
 #include "qm_interrupt.h"
@@ -70,82 +70,32 @@ static const dfu_cfg_t my_dfu_cfg = {
 };
 /* clang-format on */
 
-static void dm_request_cb(void *data, uint32_t status);
-
-/*
- * Device Management Low Power Comparator setup.
- * Internal ref voltage, low-level interrupt triggering.
- */
-static const qm_ac_config_t ac_cfg = {
-    .reference = BIT(DM_CONFIG_LPC),
-    .polarity = BIT(DM_CONFIG_LPC),
-    .power = BIT(DM_CONFIG_LPC),
-    .int_en = BIT(DM_CONFIG_LPC),
-    .callback = dm_request_cb,
-};
-
-/*--------------------------------------------------------------------------*/
-/*                           STATIC FUNCTIONS                               */
-/*--------------------------------------------------------------------------*/
-
-/*
- * Handle Device Management request.
- *
- * If the analog comparator interrupt corresponds to the Device Management
- * request pin, transition the system into Device Management mode.
- */
-static void dm_request_cb(void *data, uint32_t status)
-{
-	if (status & BIT(DM_CONFIG_LPC)) {
-		/* enter DM mode */
-		DM_STICKY_BIT_SET();
-		qm_soc_reset(QM_WARM_RESET);
-	}
-}
-
 /*--------------------------------------------------------------------------*/
 /*                           GLOBAL FUNCTIONS                               */
 /*--------------------------------------------------------------------------*/
 
-/*
- * Set up low-power comparator (LPC) pin to switch from run-time to Device
- * Management mode.
- */
-void dm_hook_setup(void)
-{
-	/* Mux out LPC and enable pull-up. */
-	qm_pmux_pullup_en(DM_CONFIG_LPC_PIN_ID, true);
-	qm_pmux_select(DM_CONFIG_LPC_PIN_ID, DM_CONFIG_LPC_PIN_FN);
-	qm_pmux_input_en(DM_CONFIG_LPC_PIN_ID, true);
-
-	/*
-	 * The analog comparator and interrupt routing blocks are powered by
-	 * the Always-On (AON) power well, so their state is preserved across
-	 * warm resets.
-	 * Mask the interrupts before setting up the LPC, so as to avoid
-	 * spurious interrupts.
-	 */
-	QM_SCSS_INT->int_comparators_host_mask = 0xFFFFFFFF;
-
-	qm_ac_set_config(&ac_cfg);
-
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
-}
-
 void dm_main(void)
 {
+	qm_gpio_state_t state;
+
 	/*
 	 * qda_init() implicitly init the HW required by XMODEM (i.e., UART and
-	 * RTC timer) and the DFU state machine
+	 * PIC timer) and the DFU state machine
 	 */
 	qda_init(&my_dfu_cfg);
-	/* NOTE: to do: init flash */
-
-	/* This function returns only when no data is received for 10 seconds */
-	qda_receive_loop();
+	do {
+		/*
+		 * The following function returns only when no data is received
+		 * for 10 seconds.
+		 */
+		qda_receive_loop();
+		qm_gpio_read_pin(DM_CONFIG_GPIO_PORT, DM_CONFIG_GPIO_PIN,
+				 &state);
+	} while (state == QM_GPIO_LOW);
 	/*
-	 * Reboot to avoid having to deinit XMODEM (i.e., restoring UART and
-	 * RTC configuration).
+	 * Cold reboot in order to restore the default system configuration
+	 * (thus getting rid of all the changes done by the DM mode, like the
+	 * UART configuration).
 	 */
-	qm_soc_reset(QM_WARM_RESET);
+	qm_soc_reset(QM_COLD_RESET);
 }

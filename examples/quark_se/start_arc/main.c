@@ -27,43 +27,41 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __DM_H__
-#define __DM_H__
+#include "qm_soc_regs.h"
 
-/* NOTE: these includes must be removed once the dfu example is updated */
-#include "dfu/dfu.h"
-#include "dfu/qda/qda.h"
-#include "dfu/qda/xmodem.h"
-#include "qdm/qdm.h"
-
-/**
- * Bootloader Device Management.
- *
- * The module implementing the DM mode of the bootloader.
- *
- * @defgroup groupDM Bootloader Device Management.
- * @{
+/*
+ * Start the ARC running.
+ * If a user has decided to create a bootloader with START_ARC=0, thereby
+ * ensuring that an x86 application is responsible for starting ARC execution.
+ * The following example provides the steps required by the x86 application.
  */
 
-/* NOTE: to be moved in a SoC-specific header */
-/** Check if the DM sticky bit is set */
-#define DM_STICKY_BIT_CHK() (QM_SCSS_GP->gps0 & BIT(0))
-/** Set the DM sticky bit */
-#define DM_STICKY_BIT_SET() (QM_SCSS_GP->gps0 |= BIT(0))
-/** Clear the DM sticky bit */
-#define DM_STICKY_BIT_CLR() (QM_SCSS_GP->gps0 &= ~BIT(0))
+#define SS_APP_PTR_ADDR (0x40000000)
 
-/**
- * Start Device Management mode.
- *
- * Setup up DM resources (communication link, timers, flash, etc.) and run the
- * DM main loop. This function never returns; indeed, DM mode is exited through
- * a reset.
- */
-void dm_main(void);
+extern uint32_t __sensor_reset_vector[];
+static __inline__ void sensor_activation(void)
+{
+	/*
+	 * Write the ARC reset vector.
+	 *
+	 * The ARC reset vector is in SRAM. The first 4 bytes of the Sensor
+	 * Subsystem Flash partition point to the application entry point
+	 * (pointer located at SS_APP_PTR_ADDR).
+	 * Write the pointer to the application entry point into the reset
+	 * vector.
+	 */
+	volatile uint32_t *ss_reset_vector = __sensor_reset_vector;
+	volatile uint32_t *sensor_startup = (uint32_t *)SS_APP_PTR_ADDR;
 
-/**
- * @}
- */
+	*ss_reset_vector = *sensor_startup;
 
-#endif /* __DM_H__ */
+	/* Request ARC Run. */
+	QM_SCSS_SS->ss_cfg |= QM_SS_CFG_ARC_RUN_REQ_A;
+}
+
+int main(void)
+{
+	sensor_activation();
+
+	return 0;
+}

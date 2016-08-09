@@ -46,7 +46,7 @@
  *
  * Initialize the Quark DFU Adaptation (QDA) module. This implicitly also
  * initializes the DFU state machine and the hardware required by XMODEM (i.e.,
- * the UART and the RTC timer).
+ * the UART and the PIC timer).
  *
  * @param[in] cfg	The DFU configuration.
  */

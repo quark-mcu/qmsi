@@ -46,6 +46,13 @@ ROM_LINKER_FILE ?= $(ROM_DIR)/rom.ld
 CFLAGS += -I$(BASE_DIR)/drivers
 CFLAGS += -I$(BASE_DIR)/bootloader/boot
 
+START_ARC ?= 1
+ifeq ($(START_ARC), 1)
+    CFLAGS += -DKICKOFF_ARC=1
+else
+    ROM := $(ROM_BUILD_DIR)/quark_se_rom_no_arc_start.bin
+endif
+
 ### For ROM we always want to handle our ISRs.
 CFLAGS += -UISR_HANDLED
 
@@ -56,6 +63,12 @@ STARTUP_OBJS += $(DM_OBJS)
 # NOTE: '-Wno-unused-parameter' added to make DM module compile; to be removed
 # once the root cause is fixed
 CFLAGS += -Wno-unused-parameter -DSYSTEM_UPDATE_ENABLE=1
+# Override ROM file-name: append '_dm' suffix
+ifneq ($(START_ARC), 1)
+    ROM := $(ROM_BUILD_DIR)/quark_se_rom_dm_no_arc_start.bin
+else
+    ROM := $(ROM_BUILD_DIR)/quark_se_rom_dm.bin
+endif
 endif
 
 ifneq ($(RTOS),)

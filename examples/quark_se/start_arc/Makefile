@@ -27,14 +27,23 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### Retention Alternating Regulator example makefile
+### Start ARC example makefile
 
 ### Variables
-APP_NAME = rar
-SOC ?= quark_d2000
+APP_NAME = start_arc
+SOC ?= quark_se
 TARGET ?= x86
-BASE_DIR := ../..
+BASE_DIR := ../../..
 APP_DIR := .
+
+ifeq ($(TARGET),sensor)
+$(error Supported TARGET values are 'x86')
+endif
+
+ifeq ($(SOC),quark_d2000)
+$(error Supported SOC values are 'quark_se')
+endif
+
 
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

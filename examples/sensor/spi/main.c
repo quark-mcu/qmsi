@@ -72,12 +72,15 @@ static void spi_transfer_polled(void)
 	trans.rx_len = BUFFER_SIZE;
 	trans.tx_len = BUFFER_SIZE;
 
+	err_code = 0;
+
+	/* Set SPI configuration */
+	err_code = qm_ss_spi_set_config(spi, &conf);
+
 	/* Enable clock for SPI 0 */
 	ss_clk_spi_enable(QM_SS_SPI_0);
 
-	/* Do the actual SPI transfer */
-	err_code = 0;
-	err_code = qm_ss_spi_set_config(spi, &conf);
+	/* Select slave and do the actual SPI transfer */
 	err_code |= qm_ss_spi_slave_select(spi, select);
 	err_code |= qm_ss_spi_transfer(spi, &trans, NULL);
 
@@ -116,13 +119,16 @@ static void spi_transfer_irq(void)
 
 	tx_buffer[0] = 0x80; /* Read chip ID */
 
+	err_code = 0;
+	xfer_active = true;
+
+	/* Set SPI configuration */
+	qm_ss_spi_set_config(spi, &conf);
+
 	/* Enable clock for SPI 0 */
 	ss_clk_spi_enable(QM_SS_SPI_0);
 
-	/* Do the actual SPI transfer */
-	err_code = 0;
-	xfer_active = true;
-	qm_ss_spi_set_config(spi, &conf);
+	/* Select slave and do the actual SPI transfer */
 	qm_ss_spi_slave_select(spi, select);
 	qm_ss_spi_irq_transfer(spi, &irq_trans);
 	while (xfer_active)
