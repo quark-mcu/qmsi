@@ -46,6 +46,7 @@
  */
 #define WAKEUP_COMPARATOR_PIN (6)
 #define USE_COMPARATOR_FOR_DEEP_SLEEP (1)
+#define ENABLE_JTAG_PINS (0x0F00000)
 
 static void rtc_example_callback();
 
@@ -145,6 +146,8 @@ int main(void)
 /* Mux out comparator */
 #if (USE_COMPARATOR_FOR_DEEP_SLEEP)
 	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_1);
+#else
+	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_0);
 #endif
 	qm_pmux_input_en(QM_PIN_ID_6, true);
 	pmux_sel_save[0] = QM_SCSS_PMUX->pmux_sel[0];
@@ -154,7 +157,8 @@ int main(void)
 	pmux_pullup_save = QM_SCSS_PMUX->pmux_pullup[0];
 
 	QM_SCSS_PMUX->pmux_sel[0] = QM_SCSS_PMUX->pmux_sel[1] = 0;
-	QM_SCSS_PMUX->pmux_in_en[0] = BIT(WAKEUP_COMPARATOR_PIN);
+	QM_SCSS_PMUX->pmux_in_en[0] =
+	    BIT(WAKEUP_COMPARATOR_PIN) | ENABLE_JTAG_PINS;
 	QM_SCSS_PMUX->pmux_pullup[0] = 0;
 
 	/* Mux out comparator */

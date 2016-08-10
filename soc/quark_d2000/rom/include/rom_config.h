@@ -30,7 +30,7 @@
 #ifndef __ROM_CONFIG_H__
 #define __ROM_CONFIG_H__
 
-/**
+/*
  * SoC pin for JTAG probing.
  *
  * On the Quark D2000 Development Platform, this is the IO0 pin.

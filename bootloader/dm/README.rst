@@ -21,11 +21,8 @@ The device management mode provides the following services to the users:
 
 The MCU enters the DM mode only after an explicit request from the host. The
 mechanism used by the host to signal an Enter-DM request to the device depends
-on the specific communication link used for device management.  In case of UART
-the host (or the user) must ground a specific low-power comparator (LPC) pin.
-
-When the device receives an Enter-DM request, it shuts down the running
-application and reboots, entering DM mode.
+on the specific communication link used for device management. In case of UART
+the host (or the user) must ground a specific pin and reset the device manually.
 
 A special case is when there is no application running on the device (i.e.,
 there is not any valid application firmware). In such a case, the bootloader

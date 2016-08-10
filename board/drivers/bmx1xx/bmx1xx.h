@@ -31,6 +31,7 @@
 #define __BMX1XX_H__
 
 #include "qm_common.h"
+#include "qm_soc_regs.h"
 
 #if (QUARK_D2000)
 #define BMC150_SENSOR (1)

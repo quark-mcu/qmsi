@@ -113,6 +113,7 @@ static __inline__ void power_setup(void)
  */
 static __inline__ void clock_setup(void)
 {
+#if (HAS_HYB_XTAL)
 	/* Apply factory settings for Crystal Oscillator stabilization
 	 * These settings adjust the trimming value and the counter value
 	 * for the Crystal Oscillator */
@@ -122,6 +123,7 @@ static __inline__ void clock_setup(void)
 	QM_SCSS_CCU->osc0_cfg0 &= ~OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_MASK;
 	QM_SCSS_CCU->osc0_cfg0 |= (OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_DEFAULT
 				   << OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_OFFS);
+#endif /* HAS_HYB_XTAL */
 
 	/*
 	 * Switch to each silicon oscillator to set up trim data
@@ -226,49 +228,58 @@ void rom_startup(void)
 	bl_data_sanitize();
 
 	/*
-	 * Workaround for spurious LPC interrupts: in addition to checking if
-	 * the DM Sticky Bit has been set, we also check if the DM LPC pin is
-	 * grounded.
+	 * Get DM pin status.
 	 *
-	 * This workaround increases the boot time for a cold boot, since the
-	 * board behavior is the following:
-	 * - Starts from cold boot
-	 * - Set DM LPC handler
-	 * - The handler triggers because of spurious interrupts during cold
-	 *   boots
-	 * - The handler performs a warm reset
-	 * - The board does not enter DM mode because of the extra check on
-	 *   DM LPC pin state
+	 * We support both regular GPIO and always-on GPIO. However, they
+	 * must be handled differently:
+	 * - For AON-GPIO we cannot assume a default configuration since in case
+	 *   of warm resets the configuration is not re-initialized
+	 *   automatically;
+	 * - For regular GPIO, we can rely on their default configuration, but
+	 *   we have to handle the pin mixing.
 	 */
 	qm_gpio_state_t state;
 
 	clk_periph_enable(CLK_PERIPH_REGISTER | CLK_PERIPH_CLK |
 			  CLK_PERIPH_GPIO_REGISTER);
-	qm_pmux_pullup_en(DM_CONFIG_LPC_PIN_ID, true);
-	qm_pmux_select(DM_CONFIG_LPC_PIN_ID, QM_PMUX_FN_0);
-	qm_gpio_read_pin(QM_GPIO_0, DM_CONFIG_LPC_PIN_ID, &state);
-	/* Check if the system update mode sticky bit is set */
-	if (DM_STICKY_BIT_CHK() && state == QM_GPIO_LOW) {
+#if (DM_CONFIG_GPIO_PORT == QM_AON_GPIO_0)
+	qm_gpio_reg_t *const gpio_ctrl = QM_GPIO[DM_CONFIG_GPIO_PORT];
+	gpio_ctrl->gpio_inten &= ~BIT(DM_CONFIG_GPIO_PIN);
+	gpio_ctrl->gpio_swporta_ddr &= ~BIT(DM_CONFIG_GPIO_PIN);
+	qm_gpio_read_pin(DM_CONFIG_GPIO_PORT, DM_CONFIG_GPIO_PIN, &state);
+#else /* DM GPIO is a regular GPIO */
+	qm_pmux_select(DM_CONFIG_GPIO_PIN, QM_PMUX_FN_0);
+	qm_pmux_pullup_en(DM_CONFIG_GPIO_PIN, true);
+	qm_pmux_input_en(DM_CONFIG_GPIO_PIN, true);
+	qm_gpio_read_pin(DM_CONFIG_GPIO_PORT, DM_CONFIG_GPIO_PIN, &state);
+	qm_pmux_pullup_en(DM_CONFIG_GPIO_PIN, false);
+#endif
+	/* Enter DM mode if DM sticky bit is set or DM_GPIO_PIN is low */
+	if (DM_STICKY_BIT_CHK() || (state == QM_GPIO_LOW)) {
 		DM_STICKY_BIT_CLR();
 		/* run the device management code; dm_main() never returns */
 		dm_main();
 	}
-	/* Set up ISR to enter DM mode */
-	dm_hook_setup();
-#endif
+#endif /* SYSTEM_UPDATE_ENABLE */
 
 	boot_services_setup();
 
-	/*
-	 * Execute application on Sensor Subsystem or Lakemont, provided that
-	 * the application has been programmed.
-	 */
+/*
+ * Execute application on Sensor Subsystem or Lakemont, provided that
+ * the application has been programmed. An RTOS / Application may want to
+ * enable the ARC at a time of its choosing to guarantee synchronisation
+ * between cores. the KICKOFF_ARC macro provides this functionality.
+ */
 
+#if (KICKOFF_ARC)
 	if (0xffffffff != *(uint32_t *)SS_APP_PTR_ADDR) {
 		sensor_activation();
 	}
+#endif
 
 	if (0xffffffff != *(uint32_t *)LMT_APP_ADDR) {
 		lmt_app_entry();
 	}
+
+	power_cpu_c2();
 }

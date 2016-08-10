@@ -27,46 +27,46 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_soc_regs.h"
-#include "qm_gpio.h"
-#include "clk.h"
-
-/* Blinky app example
+/*
+ * QMSI blinky app example.
  *
- * This app will blink a led on the development platform. For Intel(R) Quark(TM)
- * Microcontroller D2000 Development Platform, make sure to set on the board the
- * USR/SCK jumper to USR.
+ * This app will blink a LED on the development platform indefinitely.
+ *
+ * In order for this application to work correctly on the Intel(R) Quark(TM)
+ * Microcontroller D2000 Development Platform, jumper J3 must be set to USR.
  */
 
+#include "clk.h"
+#include "qm_gpio.h"
+#include "qm_pinmux.h"
+
+/* The following defines the pin and pin mux details for each SoC. */
 #if (QUARK_SE)
-/* Led on Intel(R) Quark(TM) Microcontroller Quark SE Development Platform. */
-#define LED_BIT 25
+#define PIN_OUT 25
+#define LED_PIN_ID (QM_PIN_ID_59)
 #elif(QUARK_D2000)
-/* LED on Intel(R) Quark(TM) Microcontroller D2000 Development Platform. */
-#define LED_BIT 24
+#define PIN_OUT 24
+#define LED_PIN_ID (QM_PIN_ID_24)
 #endif
-
-#define DELAY 300000UL
-
-#define MAX_LED_BLINKS (10)
-
-static qm_gpio_port_config_t cfg;
+#define PIN_MUX_FN (QM_PMUX_FN_0)
+#define DELAY 250000UL /* 0.25 seconds. */
 
 int main(void)
 {
-	uint32_t counter = 0;
-	QM_PUTS("Starting: Blinky\n");
+	static qm_gpio_port_config_t cfg;
 
-	cfg.direction = BIT(LED_BIT);
+	/* Set the GPIO pin muxing. */
+	qm_pmux_select(LED_PIN_ID, PIN_MUX_FN);
+
+	/* Set the GPIO pin direction to out and write the config. */
+	cfg.direction = BIT(PIN_OUT);
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 
-	while (counter < MAX_LED_BLINKS) {
-		qm_gpio_set_pin(QM_GPIO_0, LED_BIT);
+	/* Loop indefinitely while blinking the LED. */
+	while (1) {
+		qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
 		clk_sys_udelay(DELAY);
-		qm_gpio_clear_pin(QM_GPIO_0, LED_BIT);
+		qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 		clk_sys_udelay(DELAY);
-		counter++;
 	}
-	QM_PUTS("Finished: Blinky\n");
-	return 0;
 }

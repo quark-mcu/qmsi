@@ -27,24 +27,14 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### POWER LPSS example makefile
+### Retention Alternating Regulator example makefile
 
 ### Variables
-APP_NAME = power_lpss
-SOC ?= quark_se
-TARGET ?= sensor
+APP_NAME = rar
+SOC ?= quark_d2000
+TARGET ?= x86
 BASE_DIR := ../../..
 APP_DIR := .
-
-ifeq ($(TARGET),x86)
-$(error Supported TARGET values are 'sensor')
-endif
-
-ifeq ($(SOC),quark_d2000)
-$(error Supported SOC values are 'quark_se')
-endif
-
-CFLAGS += -I$(BASE_DIR)/drivers -DSTDOUT_UART_INIT_DISABLE
 
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

@@ -38,8 +38,8 @@
  *
  * This example is QUARK_SE specific.
  *
- * On the AtlasHills CRB, PIN_INTR is triggered by pressing push button 0,
- * which is marked as 'PB0' on the board.
+ * On the Quark SE development platform, PIN_INTR is triggered by pressing push
+ * button 0, which is marked as 'PB0' on the board.
  */
 #define PIN_INTR 4
 

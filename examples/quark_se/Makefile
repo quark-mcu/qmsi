@@ -31,7 +31,16 @@
 
 SUBDIRS := $(filter %/, $(wildcard ./*/))
 
-ifneq ($(SOC),quark_se)
+### Exclude the app that kicks the ARC off
+ifeq ($(TARGET), sensor)
+SUBDIRS := $(subst ./start_arc/,,${SUBDIRS})
+endif
+
+ifeq ($(TARGET),sensor)
+$(error Supported TARGET values are 'x86')
+endif
+
+ifeq ($(SOC),quark_d2000)
 $(error Supported SOC values are 'quark_se')
 endif
 

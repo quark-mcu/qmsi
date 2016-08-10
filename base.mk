@@ -174,11 +174,15 @@ LIBQMSI_FILENAME = lib$(LIBNAME)_$(SOC)_$(QM_VER_API).a
 LDLIBS_FILENAME = $(LIBNAME)_$(SOC)_$(QM_VER_API)
 endif
 
+HAS_RTC_XTAL := 1
+HAS_HYB_XTAL := 1
+
 ### Flags
 CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -fmessage-length=0
 CFLAGS += -I$(BASE_DIR)/include
 CFLAGS += -fno-asynchronous-unwind-tables
+CFLAGS += -DHAS_RTC_XTAL=$(HAS_RTC_XTAL) -DHAS_HYB_XTAL=$(HAS_HYB_XTAL)
 CFLAGS += -DQM_VER_API_MAJOR=$(QM_VER_API_MAJOR) \
 	-DQM_VER_API_MINOR=$(QM_VER_API_MINOR) -DQM_VER_API_PATCH=$(QM_VER_API_PATCH)
 LDFLAGS += -nostdlib

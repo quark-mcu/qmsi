@@ -29,37 +29,17 @@
 
 #include "dm_utils.h"
 
-/* CRC-16 CCITT */
-#define POLY 0x1021
-
-/*  Compute 16 bits CCITT CRC. */
-uint16_t dm_crc16_ccitt(uint8_t *data, int len)
+/*  Compute 16 bits CCITT CRC, with 0x1021 as polynomial */
+uint16_t dm_crc16_ccitt(uint8_t *pdata, int len)
 {
-	uint8_t i, b;
-	uint8_t byte;
-	uint32_t crc = 0;
+	uint32_t data, crc = 0;
 
-	for (i = 0; i < len; i++) {
-		byte = data[i];
-		for (b = 0; b < 8; b++) {
-			crc <<= 1;
-			/* add MSB bit of data to message */
-			if (byte & 0x80) {
-				crc |= 1;
-			}
-			if (crc & 0x10000)
-				crc ^= POLY;
-			byte <<= 1;
-		}
-	};
-
-	/* append 0 */
-	for (i = 0; i < 16; i++) {
-		if (crc & 0x8000)
-			crc = (crc << 1) ^ POLY;
-		else
-			crc <<= 1;
+	while (len--) {
+		data = crc ^ ((int)*pdata++) << 8;
+		data = (data >> 12) ^ data >> 8;
+		data ^= (data << 5) ^ (data << 12);
+		crc = ((crc << 8) ^ data) & 0xffff;
 	}
 
-	return (uint16_t)(crc);
+	return (uint16_t)crc;
 }

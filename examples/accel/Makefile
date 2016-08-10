@@ -43,7 +43,7 @@ endif
 endif
 
 ifeq ($(IPP_LIBRARY_PATH),)
-$(info If you want to use the IPP library for RMS, Average and Mean)
+$(info If you want to use the IPP library for RMS, Variance and Mean)
 $(info calculations, please run:)
 $(info export IPP_LIBRARY_PATH=<Path to the IPP library>)
 $(info Continuing.)

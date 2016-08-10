@@ -32,6 +32,7 @@
 #include "qm_interrupt.h"
 #include "qm_pic_timer.h"
 #include "qm_isr.h"
+#include "qm_rtc.h"
 
 /* POWER CORE app example
  *
@@ -48,6 +49,7 @@ static void timer_expired(void *data);
 int main(void)
 {
 	qm_pic_timer_config_t pic_conf;
+	qm_rtc_config_t rtc_cfg;
 
 	QM_PUTS("Starting: Power Core example");
 
@@ -75,14 +77,31 @@ int main(void)
 	power_cpu_c2();
 	QM_PUTS("Wake up from c2.");
 
-	QM_PUTS("Go to c2lp.");
-	/* Go to c2lp, PIC TIMER INT will wake me up. */
-	power_cpu_c2lp();
-	QM_PUTS("Wake up from c2lp.");
+	/*
+	 * C2 Low Power state disable the LAPIC which
+	 * disables as well usage of the PIC timer.
+	 * Disable PIC timer and use RTC instead to
+	 * wake up from C2LP.
+	 */
 
 	/* Remove PIC timer interrupts. */
 	pic_conf.int_en = false;
 	qm_pic_timer_set_config(&pic_conf);
+
+	/*  Initialise RTC configuration. */
+	rtc_cfg.init_val = 0;
+	rtc_cfg.alarm_en = true;
+	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND << 2;
+	rtc_cfg.callback = NULL;
+	rtc_cfg.callback_data = NULL;
+	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
+
+	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+
+	QM_PUTS("Go to c2lp.");
+	/* Go to c2lp, RTC will wake me up. */
+	power_cpu_c2lp();
+	QM_PUTS("Wake up from c2lp.");
 
 	QM_PUTS("Finished: Power Core example");
 

@@ -40,6 +40,7 @@
 #if (SYSTEM_UPDATE_ENABLE)
 #include "dm.h"
 #include "bl_data.h"
+#include "qm_gpio.h"
 
 /* Flash configuration defines, valid when we are running at 32MHz */
 #define FLASH_US_COUNT (0x20)
@@ -106,6 +107,7 @@ static __inline__ void power_setup(void)
  */
 static __inline__ void clock_setup(void)
 {
+#if (HAS_HYB_XTAL)
 	/* Apply factory settings for Crystal Oscillator stabilization
 	 * These settings adjust the trimming value and the counter value
 	 * for the Crystal Oscillator */
@@ -115,6 +117,7 @@ static __inline__ void clock_setup(void)
 	QM_SCSS_CCU->osc0_cfg0 &= ~OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_MASK;
 	QM_SCSS_CCU->osc0_cfg0 |= (OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_DEFAULT
 				   << OSC0_CFG0_OSC0_XTAL_COUNT_VALUE_OFFS);
+#endif /* HAS_HYB_XTAL */
 
 	/*
 	 * Switch to each silicon oscillator to set up trim data
@@ -195,14 +198,24 @@ void rom_startup(void)
 #if (SYSTEM_UPDATE_ENABLE)
 	qm_flash_set_config(QM_FLASH_0, &cfg_wr);
 	bl_data_sanitize();
-	/* Check if the system update mode sticky bit is set */
-	if (DM_STICKY_BIT_CHK()) {
+
+	/* Get DM pin status */
+	qm_gpio_state_t state;
+
+	clk_periph_enable(CLK_PERIPH_REGISTER | CLK_PERIPH_CLK |
+			  CLK_PERIPH_GPIO_REGISTER);
+	qm_pmux_select(DM_CONFIG_GPIO_PIN, QM_PMUX_FN_0);
+	qm_pmux_pullup_en(DM_CONFIG_GPIO_PIN, true);
+	qm_pmux_input_en(DM_CONFIG_GPIO_PIN, true);
+	/* No need to configure the GPIO, default configuration is okay. */
+	qm_gpio_read_pin(DM_CONFIG_GPIO_PORT, DM_CONFIG_GPIO_PIN, &state);
+	qm_pmux_pullup_en(DM_CONFIG_GPIO_PIN, false);
+	/* Enter DM mode if DM sticky bit is set or DM_GPIO_PIN is low */
+	if (DM_STICKY_BIT_CHK() || (state == QM_GPIO_LOW)) {
 		DM_STICKY_BIT_CLR();
 		/* run the device management code; dm_main() never returns */
 		dm_main();
 	}
-	/* Set up ISR to enter DM mode */
-	dm_hook_setup();
 #endif
 
 	boot_services_setup();
@@ -211,4 +224,6 @@ void rom_startup(void)
 	if (0xffffffff != *(uint32_t *)LMT_APP_ADDR) {
 		app_entry();
 	}
+
+	power_cpu_halt();
 }

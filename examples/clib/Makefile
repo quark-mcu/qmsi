@@ -38,5 +38,11 @@ APP_DIR := .
 
 CFLAGS += -DASSERT_ENABLE
 
+# Enable printf float printing functionality for
+# x86 targets by enabling this LDFLAGS
+ifeq ($(TARGET), x86)
+LDFLAGS += -u _printf_float
+endif
+
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

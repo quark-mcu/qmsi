@@ -39,15 +39,29 @@
 
 int main(void)
 {
-	unsigned int cnt;
 	int *p;
 	int i;
 
+	QM_PUTS("Starting: clib");
+
+	p = malloc(SIZE * sizeof(int));
+
+	if (NULL == p) {
+		QM_PUTS("Error: malloc unable to allocate memory");
+		return -EIO;
+	}
+
+	for (i = 0; i < SIZE; i++) {
+		p[i] = i;
+	}
+
 	QM_PUTS("Demonstrating QM_PUTS/QM_PRINTF functionality");
 
-	for (cnt = 0; cnt < 10; cnt++) {
-		QM_PRINTF("%d\n", cnt);
+	for (i = 0; i < 10; i++) {
+		QM_PRINTF("%d\n", p[i]);
 	}
+
+	free(p);
 
 	/* pico_printf only supports %d, %u, %x, %X and %s */
 	pico_printf("pico_printf demo: %d\n", 5);
@@ -55,17 +69,11 @@ int main(void)
 	/* Full printf has a bigger footprint than pico_printf */
 	printf("printf demo: %.3f\n", 3.14159);
 
-	QM_PUTS("Demonstrating QM_ASSERT functionality");
+	QM_PUTS("Demonstrating QM_ASSERT functionality: \"Assert 1 == 1\"");
 
-	QM_ASSERT(1 == 0);
+	QM_ASSERT(1 == 1);
 
-	p = malloc(SIZE * sizeof(int));
-
-	for (i = 0; i < SIZE; i++) {
-		p[i] = i;
-	}
-
-	free(p);
+	QM_PUTS("Finished: clib");
 
 	return 0;
 }

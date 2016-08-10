@@ -34,11 +34,16 @@ MEMORY
 	flash0 (r)	: ORIGIN = 0x40000000, LENGTH = 188K
 	soc_data (r)	: ORIGIN = 0x4002F000, LENGTH = 4K
 	flash1 (r)	: ORIGIN = 0x40030000, LENGTH = 192K
+	/* Sensor Subsystem vector table (68 entries) */
+	sensor_vectors (rw) : ORIGIN = 0xA8000000, LENGTH = 68
 	/* Place IDT at the bottom of SRAM, 68 gate wide */
 	esram_idt (rw)	: ORIGIN = 0xA800A000, LENGTH = 0x220
 	esram (rw)	: ORIGIN = 0xA800A220, LENGTH = 40K - 1K - 0x220
 	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K
 }
+
+/* Sensor Subsystem reset vector definition */
+__sensor_reset_vector = ORIGIN(sensor_vectors);
 
 /* IDT definition */
 __idt_start = ORIGIN(esram_idt);

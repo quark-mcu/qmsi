@@ -29,6 +29,10 @@
 
 ### Make all specific examples
 
+SOC ?= quark_d2000
+TARGET ?= x86
+BUILD ?= release
+
 SUBDIRS := $(filter %/, $(wildcard ./*/))
 
 ifneq ($(SOC),quark_d2000)

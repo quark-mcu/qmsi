@@ -57,6 +57,7 @@ uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE_DWORDS];
 
 #define AONC_CFG_AONC_CNT_EN BIT(0)
 
+#if (HAS_RTC_XTAL)
 /**
  * Compute the silicon oscillator trim code.
  *
@@ -133,6 +134,7 @@ static int boot_clk_trim_compute(clk_sys_mode_t mode, uint16_t *const trim)
 
 	return rc;
 }
+#endif /* HAS_RTC_XTAL */
 
 /**
  * Store trim code in flash.
@@ -148,18 +150,17 @@ static int boot_clk_trim_compute(clk_sys_mode_t mode, uint16_t *const trim)
 static int boot_clk_trim_code_store(qm_flash_data_trim_t *trim_codes)
 {
 	int rc = 0;
-	qm_flash_config_t cfg;
+	static const qm_flash_config_t cfg = {
+	    .us_count = SYS_TICKS_PER_US_32MHZ / BIT(CLK_SYS_DIV_1),
+	    .wait_states = 0x1,
+	    .write_disable = QM_FLASH_WRITE_ENABLE};
 
 	/* Set flash configuration.
 	 * Keep default wait_states.
 	 * Set the number of clocks in a micro second
 	 * for the current frequency.
-	 * Current frequency is 4MHZ as defined by boot_clk_trim_code_setup().
+	 * Current frequency is 32MHZ as defined by boot_clk_trim_code_setup().
 	 */
-	cfg.us_count = SYS_TICKS_PER_US_4MHZ / BIT(CLK_SYS_DIV_2);
-	cfg.wait_states = 0x1;
-	cfg.write_disable = QM_FLASH_WRITE_ENABLE;
-
 	rc = qm_flash_set_config(QM_FLASH_0, &cfg);
 	QM_CHECK(rc == 0, rc);
 
@@ -199,8 +200,14 @@ static int boot_clk_trim_code_get(const clk_sys_mode_t mode, uint16_t *trim)
 	 */
 	if ((QM_FLASH_OTP_TRIM_MAGIC != QM_FLASH_OTP_SOC_DATA_VALID) ||
 	    ((*trim & QM_FLASH_TRIM_PRESENT_MASK) != QM_FLASH_TRIM_PRESENT)) {
+#if (HAS_RTC_XTAL)
 		rc = boot_clk_trim_compute(mode, trim);
 		QM_CHECK(rc == 0, rc);
+#else
+		(void)mode;
+		*trim &= ~QM_FLASH_TRIM_PRESENT_MASK;
+		return -EINVAL;
+#endif /* HAS_RTC_XTAL */
 	}
 
 	*trim &= ~QM_FLASH_TRIM_PRESENT_MASK;
@@ -261,8 +268,8 @@ int boot_clk_trim_code_setup(void)
 	for (mode = CLK_SYS_HYB_OSC_32MHZ; mode < CLK_SYS_RTC_OSC; mode++) {
 		rc = boot_clk_trim_code_get(
 		    mode, (uint16_t *)&trim_codes.osc_trim_u16[mode]);
-		QM_CHECK(rc == 0, rc);
 	}
+	boot_clk_hyb_set_mode(CLK_SYS_HYB_OSC_32MHZ, CLK_SYS_DIV_1);
 	rc = boot_clk_trim_code_store(&trim_codes);
 
 	return rc;

@@ -32,21 +32,26 @@
 #include "qm_isr.h"
 #include "qm_pinmux.h"
 #include "qm_interrupt.h"
-#include "qm_rtc.h"
+#include "qm_pic_timer.h"
 #include "qm_uart.h"
 #include "clk.h"
 
 #include "xmodem_io.h"
 #include "../../dm_comm.h"
 
+#define PIC_TIMER_ALARM_SECOND (0x2000000)
 #define XMODEM_UART_TIMEOUT_S (2)
+
+#if (!HAS_RTC_XTAL)
+#error "xmodem cannot work without RTC..."
+#endif /* !HAS_RTC_XTAL */
 
 /*-------------------------------------------------------------------------*/
 /*                          FORWARD DECLARATIONS                           */
 /*-------------------------------------------------------------------------*/
 static void uart_callback(void *data, int error, qm_uart_status_t status,
 			  uint32_t len);
-static void rtc_callback(void *data);
+static void pic_timer_callback(void *data);
 
 /*-------------------------------------------------------------------------*/
 /*                            GLOBAL VARIABLES                             */
@@ -70,12 +75,11 @@ static const qm_uart_transfer_t uart_transfer = {
     .callback_data = NULL,
 };
 
-/** The XMODEM RTC configuration. */
-static qm_rtc_config_t rtc_cfg = {
-    .init_val = 0,
-    .alarm_en = false,
-    .alarm_val = (QM_RTC_ALARM_SECOND * XMODEM_UART_TIMEOUT_S),
-    .callback = rtc_callback,
+/** The XMODEM PIC Timer configuration. */
+static const qm_pic_timer_config_t pic_timer_cfg = {
+    .mode = QM_PIC_TIMER_MODE_ONE_SHOT,
+    .int_en = true,
+    .callback = pic_timer_callback,
     .callback_data = NULL,
 };
 
@@ -101,7 +105,7 @@ static void uart_callback(void *data, int error, qm_uart_status_t status,
 	}
 }
 
-static void rtc_callback(void *data)
+static void pic_timer_callback(void *data)
 {
 	xmodem_io_rx_state = STATE_TIMEOUT;
 }
@@ -121,14 +125,14 @@ int xmodem_io_getc(uint8_t *ch)
 	enum rx_state retv;
 
 	/* Set up timeout timer */
-	rtc_cfg.alarm_en = true;
-	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
+	qm_pic_timer_set_config(&pic_timer_cfg);
+	qm_pic_timer_set(PIC_TIMER_ALARM_SECOND * XMODEM_UART_TIMEOUT_S);
 
-	/* Reseting the state and read byte */
+	/* Resetting the state and read byte */
 	xmodem_io_rx_state = STATE_WAITING;
 	qm_uart_irq_read(DM_CONFIG_UART, &uart_transfer);
 
-	/* Wait for UART interruption or RTC timeout callback */
+	/* Wait for UART interruption or PIC Timer timeout callback */
 	while (retv = xmodem_io_rx_state, retv == STATE_WAITING) {
 		; /* Busy wait until one of the callbacks is called */
 	}
@@ -148,10 +152,6 @@ int xmodem_io_getc(uint8_t *ch)
 		break;
 	}
 
-	/* Disable timer alarm */
-	rtc_cfg.alarm_en = false;
-	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
-
 	return retv;
 }
 
@@ -165,9 +165,8 @@ void xmodem_io_uart_init()
 	qm_pmux_select(DM_COMM_UART_PIN_RX_ID, DM_COMM_UART_PIN_RX_FN);
 	qm_pmux_input_en(DM_COMM_UART_PIN_RX_ID, true);
 
-	/* Enable UART and RTC clocks */
-	clk_periph_enable(DM_COMM_UART_CLK | CLK_PERIPH_RTC_REGISTER |
-			  CLK_PERIPH_CLK);
+	/* Enable UART clocks */
+	clk_periph_enable(DM_COMM_UART_CLK | CLK_PERIPH_CLK);
 
 	/* Setup UART */
 	qm_uart_set_config(DM_CONFIG_UART, &uart_config);
@@ -175,7 +174,10 @@ void xmodem_io_uart_init()
 	/* Request IRQ for UART */
 	dm_comm_irq_request();
 
-	/* Set up timeout timer (RTC) */
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
-	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
+#if (HAS_APIC)
+	/* Request interrupts for PIC Timer */
+	qm_int_vector_request(QM_INT_VECTOR_PIC_TIMER, qm_pic_timer_isr);
+#elif(HAS_MVIC)
+	qm_irq_request(QM_IRQ_PIC_TIMER, qm_pic_timer_isr);
+#endif
 }

@@ -33,8 +33,11 @@
 #include "qm_gpio.h"
 #include "qm_uart.h"
 #include "qm_ss_isr.h"
+#include "qm_pinmux.h"
 
-#define LED_BIT (25) /* On-board LED on Atlas Hills board */
+#define LED_BIT (25) /* On-board LED on Quark SE development platform. */
+#define PIN_MUX_ID (QM_PIN_ID_59)
+#define PIN_MUX_FN (QM_PMUX_FN_0)
 
 #define ONE_SEC_AT_32MHZ (0x02000000)
 
@@ -62,7 +65,7 @@ static void timer0_expired(void *data)
  *
  * Interrupt is triggered every TWO_SEC_AT_32MHZ.
  *
- * On Atlas Hills, this examples blinks the on-board LED.
+ * On the Quark SE development platform, this example blinks the on-board LED.
  */
 int main(void)
 {
@@ -75,6 +78,9 @@ int main(void)
 	 * not a peripheral's IRQ.  */
 	qm_ss_int_vector_request(QM_SS_INT_TIMER_0, qm_ss_timer_isr_0);
 	qm_ss_irq_unmask(QM_SS_INT_TIMER_0);
+
+	/* Set the GPIO pin muxing */
+	qm_pmux_select(PIN_MUX_ID, PIN_MUX_FN);
 
 	/* Request IRQ and write GPIO port config */
 	gpio_cfg.direction = BIT(LED_BIT);
