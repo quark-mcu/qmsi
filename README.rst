@@ -193,6 +193,12 @@ done with:
 
 ``(gdb) monitor load_image $PATH_TO_QMSI/examples/hello_world/debug/quark_d2000/bin/hello_world.bin 0x00180000``
 
+Device Firmware Update (DFU)
+============================
+
+A special bootloader can be built allowing the device to be updated without the
+use of OpenOCD. Please refer to `<doc/dfu.rst>`__ for more information.
+
 Serial Output
 =============
 
