@@ -241,6 +241,12 @@ Applications for the ARC are flashed using the following command:
 
 ``(gdb) monitor load_image $PATH_TO_QMSI/examples/hello_world/release/quark_se/x86/bin/hello_world.bin 0x40030000``
 
+Device Firmware Update (DFU)
+============================
+
+A special bootloader can be built allowing the device to be updated without the
+use of OpenOCD. Please refer to `<doc/dfu.rst>`__ for more information.
+
 Serial Output
 =============
 
