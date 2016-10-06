@@ -27,104 +27,56 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_pwm.h"
-#include "qm_interrupt.h"
+/*
+ * Pulse Width Modulation (PWM)
+ *
+ * This example application demonstrates the PWM functionality on the
+ * Intel(R) Quark(TM) development platforms.
+ */
+
 #include "clk.h"
 #include "qm_gpio.h"
-#include "qm_pinmux.h"
+#include "qm_interrupt.h"
 #include "qm_isr.h"
+#include "qm_pinmux.h"
+#include "qm_pwm.h"
 
-#define UDELAY (500000)
+#define DELAY (500000) /* 0.5 seconds. */
+#define NUM_CALLBACK (50)
 
 #if (QUARK_D2000)
-#define QM_PWM_CH_0_PIN (19)
-#define QM_PWM_CH_0_FN_GPIO (1)
-#define QM_PWM_CH_0_FN_PWM (2)
 #define QM_PWM_CH_1_PIN (24)
 #define QM_PWM_CH_1_FN_GPIO (0)
 #define QM_PWM_CH_1_FN_PWM (2)
 #elif(QUARK_SE)
-/*
- * These values will not work from the Lakemont core as the PWM pins are muxed
- * with the sensor subsystem GPIO pins.
- */
-#define QM_PWM_CH_0_PIN (63)
-#define QM_PWM_CH_0_FN_GPIO (0)
-#define QM_PWM_CH_0_FN_PWM (1)
 #define QM_PWM_CH_1_PIN (64)
 #define QM_PWM_CH_1_FN_GPIO (0)
 #define QM_PWM_CH_1_FN_PWM (1)
-#else
-#error("Unsupported / unspecified processor type")
-#endif
+#endif /* QUARK_D2000 */
 
-void pwm_example_callback(void *data, uint32_t pwm_int);
-void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high);
+// static uint32_t interrupt_from;
+static uint32_t cb_count;
+static volatile bool complete;
 
-uint32_t interrupt_from;
-
-/* QMSI pwm app example */
-int main(void)
+static void pwm_example_callback(void *data, uint32_t pwm_int)
 {
-	/* Variables */
-	qm_pwm_config_t wr_cfg;
-	uint32_t lo_cnt, hi_cnt;
-
-	QM_PRINTF("Starting: PWM\n");
-	/* Initialise pwm configuration */
-	wr_cfg.lo_count = 0x100000;
-	wr_cfg.hi_count = 0x100000;
-	wr_cfg.mode = QM_PWM_MODE_PWM;
-	wr_cfg.mask_interrupt = false;
-	wr_cfg.callback = pwm_example_callback;
-	wr_cfg.callback_data = NULL;
-
-	/* Enable clocking for the PWM block */
-	clk_periph_enable(CLK_PERIPH_PWM_REGISTER | CLK_PERIPH_CLK);
-
-	/* Set the configuration of the PWM */
-	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &wr_cfg);
-	/* Register the ISR with the SoC */
-	qm_irq_request(QM_IRQ_PWM_0, qm_pwm_isr_0);
-
-	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_PWM);
-	/* Start PWM 2 */
-	qm_pwm_start(QM_PWM_0, QM_PWM_ID_1);
-
-	/* Optionally, get the current count values */
-	qm_pwm_get(QM_PWM_0, QM_PWM_ID_1, &lo_cnt, &hi_cnt);
-
-	clk_sys_udelay(UDELAY);
-	/* Optionally, reload new values into the PWM */
-	lo_cnt = hi_cnt = 0x40000;
-	qm_pwm_set(QM_PWM_0, QM_PWM_ID_1, lo_cnt, hi_cnt);
-
-	clk_sys_udelay(UDELAY);
-
-	/* Set PWM with 0% duty cycle. */
-	set_pwm_as_gpio(QM_PWM_0, QM_PWM_ID_1, false);
-	clk_sys_udelay(UDELAY);
-	/* Set PWM with 100% duty cycle. */
-	set_pwm_as_gpio(QM_PWM_0, QM_PWM_ID_1, true);
-	clk_sys_udelay(UDELAY);
-	/* Stop the PWM from running */
-	qm_pwm_stop(QM_PWM_0, QM_PWM_ID_1);
-	/* Disable clocking for the PWM block */
-	clk_periph_disable(CLK_PERIPH_PWM_REGISTER);
-
-	QM_PRINTF("Finished: PWM\n");
-	return 0;
+	if (cb_count < NUM_CALLBACK) {
+		++cb_count;
+	} else {
+		complete = true;
+	}
 }
 
 /*
  * Duty cycles of 0% and 100% are not handled by the PWM block. Instead, these
  * are essentially a constant low, or constant high value on the pin.
  */
-void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
+static void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
 {
 #if (QUARK_D2000)
 	/* Set pin as output. */
 	qm_gpio_port_config_t cfg;
+
 	cfg.direction = QM_GPIO[QM_GPIO_0]->gpio_swporta_ddr;
 	cfg.int_en = QM_GPIO[QM_GPIO_0]->gpio_inten;
 	cfg.int_type = QM_GPIO[QM_GPIO_0]->gpio_inttype_level;
@@ -133,38 +85,22 @@ void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
 	cfg.int_bothedge = QM_GPIO[QM_GPIO_0]->gpio_int_bothedge;
 	cfg.callback = NULL;
 	cfg.callback_data = NULL;
-
 #elif(QUARK_SE)
 /*
  * Warning: Quark SE pins are on sensor subsystem, need to set sensor subsystem
  * port. This can not be done from the Lakemont core.
  */
 #endif
-	uint32_t pin = 0;
-	qm_pmux_fn_t fn = 0;
-
-	switch (id) {
-	case QM_PWM_ID_0:
-		pin = QM_PWM_CH_0_PIN;
-		fn = QM_PWM_CH_0_FN_GPIO;
-		break;
-	case QM_PWM_ID_1:
-		pin = QM_PWM_CH_1_PIN;
-		fn = QM_PWM_CH_1_FN_GPIO;
-		break;
-	default:
-		break;
-	}
 	/* Perform pin muxing. */
-	qm_pmux_select(pin, fn);
+	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_GPIO);
 
 #if (QUARK_D2000)
-	cfg.direction |= BIT(pin);
+	cfg.direction |= BIT(QM_PWM_CH_1_PIN);
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 	if (true == high) {
-		qm_gpio_set_pin(QM_GPIO_0, pin);
+		qm_gpio_set_pin(QM_GPIO_0, QM_PWM_CH_1_PIN);
 	} else {
-		qm_gpio_clear_pin(QM_GPIO_0, pin);
+		qm_gpio_clear_pin(QM_GPIO_0, QM_PWM_CH_1_PIN);
 	}
 #elif(QUARK_SE)
 /*
@@ -174,27 +110,61 @@ void set_pwm_as_gpio(const qm_pwm_t pwm, const qm_pwm_id_t id, bool high)
 #endif
 }
 
-void pwm_example_callback(void *data, uint32_t pwm_int)
+int main(void)
 {
-	if (pwm_int & BIT(QM_PWM_ID_0)) {
-		QM_PUTS("PWM 0 fired.\n");
-		interrupt_from = QM_PWM_ID_0;
-	}
+	qm_pwm_config_t cfg;
+	uint32_t lo_cnt, hi_cnt;
 
-	if (pwm_int & BIT(QM_PWM_ID_1)) {
-		QM_PUTS("PWM 1 fired.\n");
-		interrupt_from = QM_PWM_ID_1;
-	}
+	QM_PUTS("Starting: PWM example");
 
-#if (HAS_4_TIMERS)
-	if (pwm_int & BIT(QM_PWM_ID_2)) {
-		QM_PUTS("PWM 2 fired.\n");
-		interrupt_from = QM_PWM_ID_2;
-	}
+	/* Initialise PWM configuration. */
+	cfg.lo_count = 0x100000; /* Set low count. */
+	cfg.hi_count = 0x100000; /* Set high count. */
+	cfg.mode = QM_PWM_MODE_PWM;
+	cfg.mask_interrupt = false;
+	cfg.callback = pwm_example_callback;
+	cfg.callback_data = NULL;
 
-	if (pwm_int & BIT(QM_PWM_ID_3)) {
-		QM_PUTS("PWM 3 fired.\n");
-		interrupt_from = QM_PWM_ID_3;
-	}
-#endif
+	/* Enable clocking for the PWM block. */
+	clk_periph_enable(CLK_PERIPH_PWM_REGISTER | CLK_PERIPH_CLK);
+
+	/* Set the configuration of the PWM. */
+	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &cfg);
+	/* Register the ISR with the SoC. */
+	qm_irq_request(QM_IRQ_PWM_0, qm_pwm_isr_0);
+
+	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_PWM);
+	/* Start PWM0 channel 1. */
+	qm_pwm_start(QM_PWM_0, QM_PWM_ID_1);
+
+	while (!complete)
+		;
+
+	QM_PUTS("PWM channel 1 fired.");
+
+	/* Set new values into the PWM. */
+	lo_cnt = hi_cnt = 0x40000;
+	qm_pwm_set(QM_PWM_0, QM_PWM_ID_1, lo_cnt, hi_cnt);
+
+	cb_count = 0;
+	while (!complete)
+		;
+
+	QM_PUTS("PWM channel 1 fired.");
+
+	/* Set PWM with 0% duty cycle. */
+	set_pwm_as_gpio(QM_PWM_0, QM_PWM_ID_1, false);
+	clk_sys_udelay(DELAY);
+	/* Set PWM with 100% duty cycle. */
+	set_pwm_as_gpio(QM_PWM_0, QM_PWM_ID_1, true);
+	clk_sys_udelay(DELAY);
+
+	/* Stop the PWM from running. */
+	qm_pwm_stop(QM_PWM_0, QM_PWM_ID_1);
+	/* Disable clocking for the PWM block. */
+	clk_periph_disable(CLK_PERIPH_PWM_REGISTER);
+
+	QM_PUTS("Finished: PWM example");
+
+	return 0;
 }

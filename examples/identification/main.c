@@ -27,14 +27,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Identification
+ *
+ * This app will print the ID and version of the SoC.
+ */
 #include "qm_identification.h"
 
 int main(void)
 {
-	QM_PRINTF("Starting: Identification\n");
-	QM_PRINTF("SOC id: 0x%x\n", (unsigned int)qm_soc_id());
+	QM_PUTS("Starting: Identification");
+
+	QM_PRINTF("SOC ID: 0x%x\n", (unsigned int)qm_soc_id());
+
 	QM_PRINTF("SOC version: 0x%x\n", (unsigned int)qm_soc_version());
-	QM_PRINTF("Finished: Identification\n");
+
+	QM_PUTS("Finished: Identification");
 
 	return 0;
 }

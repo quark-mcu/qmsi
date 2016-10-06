@@ -27,20 +27,24 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_flash.h"
-
 /*
+ * Flash Access
+ *
+ * This app demonstrates the use of the flash controller.
+ *
  * The flash controller segments its memory into pages of 2KB in size
  * (multiples of 0x800). Writes don't cross over to other pages.
  *
- * For Quark Microcontroller D2000, there is 1 flash controller.
+ * The Intel(R) Quark(TM) D2000 SoC has a single flash controller.
+ *
  * Controller 0:
  * |  Component                 | Size          | System start address
  * |  System ROM		| 8KB	 	| 0x00000000
  * |  System Flash		| 32KB		| 0x00180000
  * |  Data region		| 4KB		| 0x00200000
  *
- * For Quark SE SOC, there are 2 flash controllers.
+ * The Intel(R) Quark(TM) SE SoC has 2 flash controllers.
+ *
  * Controller 0:
  * |  Component                 | Size          | System start address
  * |  System Flash		| 192KB		| 0x40000000
@@ -51,11 +55,13 @@
  * |  System Flash		| 192KB		| 0x40030000
  */
 
-#define NUM_DATA_WORDS (0x03)
-#define WR_PAGE_OFFSET (0x10)
+#include "qm_flash.h"
+
 #define MASS_ERASE_INCLUDE_ROM (0x00)
+#define NUM_DATA_WORDS (0x03)
 #define US_COUNT (0x20)
 #define WAIT_STATES (0x01)
+#define WR_PAGE_OFFSET (0x10)
 
 #if (QUARK_D2000)
 #define FLASH_END (0x00200000)
@@ -70,18 +76,20 @@
 static uint32_t flash_page_buffer[QM_FLASH_PAGE_SIZE_DWORDS];
 uint32_t flash_data[NUM_DATA_WORDS] = {0x00010203, 0x04050607, 0x08090A0B};
 
+/*
+ * Resolve the extent of the application in flash, so as to find the first free
+ * flash page to safely write to.
+ * This is needed in order to avoid overwriting the region of flash where the
+ * application is stored.
+ * Note: the __data_lma and __data_size are resolved at linking time.
+ */
 extern uint32_t __data_lma[];
 extern uint32_t __data_size[];
 
-/* QMSI flash access app example */
 int main(void)
 {
-	qm_flash_config_t cfg_wr;
-	uint32_t wr_flash_addr;
-	uint32_t app_end;
-	uint32_t page_num;
-	uint32_t flash_base;
-	uint32_t flash_num;
+	qm_flash_config_t cfg;
+	uint32_t wr_flash_addr, app_end, page_num, flash_base, flash_num;
 
 #if (QUARK_D2000)
 	flash_base = QM_FLASH_REGION_SYS_0_BASE;
@@ -91,30 +99,27 @@ int main(void)
 	flash_num = QM_FLASH_1;
 #endif
 
-	QM_PRINTF("Starting: Flash\n");
+	QM_PUTS("Starting: Flash");
 	app_end = (uint32_t)__data_lma + (uint32_t)__data_size;
 
-	/*
-	 * Check there is at least one free flash page after the application
-	 * code
-	 */
+	/* Check there is at least one free flash page after the app code. */
 	if ((app_end + QM_FLASH_PAGE_SIZE_BYTES) > FLASH_END) {
-		QM_PRINTF("Error: No free pages. Quitting.\n");
-		return 0;
+		QM_PUTS("Error: No free pages. Quitting.");
+		return 1;
 	}
 
 	/*
 	 * Calculate flash page number, and an MMIO address representing a
-	 * location inside the page
+	 * location inside the page.
 	 */
 	page_num = ((app_end - flash_base) / QM_FLASH_PAGE_SIZE_BYTES) + 1;
 	wr_flash_addr = (QM_FLASH_PAGE_SIZE_BYTES * page_num) + WR_PAGE_OFFSET;
 
-	cfg_wr.us_count = US_COUNT;
-	cfg_wr.wait_states = WAIT_STATES;
-	cfg_wr.write_disable = QM_FLASH_WRITE_ENABLE;
+	cfg.us_count = US_COUNT;
+	cfg.wait_states = WAIT_STATES;
+	cfg.write_disable = QM_FLASH_WRITE_ENABLE;
 
-	qm_flash_set_config(flash_num, &cfg_wr);
+	qm_flash_set_config(flash_num, &cfg);
 
 	/* Requires a 2KB buffer to store flash page. */
 	qm_flash_page_update(flash_num, QM_FLASH_REGION_SYS, wr_flash_addr,
@@ -125,6 +130,7 @@ int main(void)
 	qm_flash_page_write(flash_num, QM_FLASH_REGION_SYS, page_num,
 			    flash_data, NUM_DATA_WORDS);
 
-	QM_PRINTF("Finished: Flash\n");
+	QM_PUTS("Finished: Flash");
+
 	return 0;
 }

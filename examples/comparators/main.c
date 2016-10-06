@@ -26,81 +26,80 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <stdio.h>
 
+/*
+ * Comparator
+ *
+ * This app sets up comparator 0 to fire an interrupt when the input voltage on
+ * the pin is greater than the internal reference voltage (0.95V)
+ *
+ * On the Intel(R) Quark(TM) Microcontroller D2000 Development Platform the pin
+ * used is marked "SSO 10".
+ *
+ * On the Intel(R) Quark(TM) Microcontroller SE Development Platform the pin
+ * used is pin 42 on header J15.
+ */
+
+#include <stdio.h>
 #include "qm_common.h"
 #include "qm_comparator.h"
-#include "qm_pinmux.h"
 #include "qm_interrupt.h"
 #include "qm_isr.h"
-
-static void ac_example_callback(void *, uint32_t);
+#include "qm_pinmux.h"
 
 static volatile bool callback_invoked = false;
+static volatile uint32_t callback_status;
+
+/* Analog comparator example callback. */
+static void ac_example_callback(void *data, uint32_t status)
+{
+/*
+ * The analog comparators use level triggered interrupts so it will trigger a
+ * constant stream of interrupts if it is not masked. The following lines mask
+ * the interrupts after the first one has fired.
+ */
+#if (QM_SENSOR)
+	QM_SCSS_INT->int_comparators_ss_mask |= BIT(0);
+#else
+	QM_SCSS_INT->int_comparators_host_mask |= BIT(0);
+#endif
+
+	callback_invoked = true;
+	callback_status = status;
+}
 
 int main(void)
 {
-	/* Comparator example app
-	 *
-	 * This app sets up comparator 0 to fire an interrupt when the input
-	 * voltage is greater than the reference voltage (0.95V)
-	 *
-	 * On the Intel(R) Quark(TM) Microcontroller D2000 Development Platform
-	 * the pin used is marked "SSO 10"
-	 */
-
 	qm_ac_config_t ac_cfg;
 
-	QM_PUTS("Starting: Analog Comparators\n");
+	QM_PUTS("Starting: Analog Comparators");
 
 #if (QM_SENSOR)
 	QM_SCSS_INT->int_comparators_ss_mask &= ~BIT(0);
 #endif
 
-	/* Set up pin muxing and request IRQ*/
+	/* Set up pin muxing and request IRQ. */
 	qm_pmux_select(QM_PIN_ID_0, QM_PMUX_FN_1);
 	qm_pmux_input_en(QM_PIN_ID_0, true);
 
+	/* Request IRQ and write comparator config. */
 	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
 
-	/* Write configs */
-	ac_cfg.reference = BIT(0); /* Ref internal voltage */
-	ac_cfg.polarity = 0x0;     /* Fire if greater than ref (high level) */
-	ac_cfg.power = BIT(0);     /* Normal operation mode */
-	ac_cfg.int_en = BIT(0);    /* AIN0 enable */
+	ac_cfg.reference = BIT(0); /* Ref internal voltage. */
+	ac_cfg.polarity = 0x0;     /* Fire if greater than ref (high level). */
+	ac_cfg.power = BIT(0);     /* Normal operation mode. */
+	ac_cfg.int_en = BIT(0);    /* AIN0 enable. */
 	ac_cfg.callback = ac_example_callback;
 
 	qm_ac_set_config(&ac_cfg);
 
-	while (false == callback_invoked) {
-	}
-	QM_PUTS("Finished: Analog Comparators\n");
+	/* Wait for the callback to be invoked and print the status. */
+	while (false == callback_invoked)
+		;
+
+	QM_PRINTF("Comparator callback status 0x%u\n", callback_status);
+
+	QM_PUTS("Finished: Analog Comparators");
 
 	return 0;
-}
-
-static void ac_example_callback(void *data, uint32_t status)
-{
-#if (QM_SENSOR)
-	/*
-	 * The analog comparators use level triggered interrupts so we will get
-	 * a constant stream of interrupts if we do not mask them.
-	 */
-
-	/*
-	 * Comment the following line if you want to get more
-	 * than one interrupt on the sensor subsystem.
-	 */
-	QM_SCSS_INT->int_comparators_ss_mask |= BIT(0);
-#else
-	/*
-	 * Comment the following line if you want to get more
-	 * than one interrupt on the x86 core.
-	 */
-	QM_SCSS_INT->int_comparators_host_mask |= BIT(0);
-#endif
-
-	QM_PUTS("Comparator interrupt fired");
-	QM_ASSERT(0x1 == status);
-	callback_invoked = true;
 }

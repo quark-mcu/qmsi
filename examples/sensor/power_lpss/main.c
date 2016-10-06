@@ -27,6 +27,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Low Power Sensing Standby (LPSS) State
+ *
+ * This application must run in conjunction with its Host counterpart
+ * located in ./examples/quark_se/power_lpss/.
+ * Refer to the host application for the board setup.
+ *
+ * States executed in this example are:
+ * LPSS: Combination of C2/C2LP (Host state) and SS2
+ */
+
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
@@ -39,22 +50,13 @@
 #include "qm_uart.h"
 #include "ss_power_states.h"
 
-/*
- * Low Power Sensing Standby (LPSS) State example.
- *
- * This application must run in conjunction with its Host counterpart
- * located in ./examples/quark_se/power_lpss/.
- * Refer to the host application for the board setup.
- *
- * States executed in this example are:
- * LPSS: Combination of C2/C2LP (Host state) and SS2
- */
-
 #define PIN_OUT (0)
 
 #define QM_SCSS_GP_SENSOR_READY BIT(2)
 
 #define RTC_SYNC_CLK_COUNT (5)
+
+#define GPIO_TOGGLE_DELAY 500
 
 int main(void)
 {
@@ -62,11 +64,12 @@ int main(void)
 	uint32_t aonc_start;
 
 	/*  Initialise RTC configuration. */
-	rtc_cfg.init_val = 0;			 /* Set initial value to 0. */
-	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND; /* 1s alarm. */
-	rtc_cfg.alarm_en = 1;			 /* Enable alarm. */
+	rtc_cfg.init_val = 0; /* Set initial value to 0. */
+	rtc_cfg.alarm_en = 1; /* Enable alarm. */
+	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1); /* 1s alarm. */
 	rtc_cfg.callback = NULL;
 	rtc_cfg.callback_data = NULL;
+	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
 	/*
@@ -77,8 +80,8 @@ int main(void)
 	 * If an entry to sleep is initiated without waiting for the
 	 * transaction to complete the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_SCSS_AON[0].aonc_cnt;
-	while (QM_SCSS_AON[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
+	aonc_start = QM_AONC[0].aonc_cnt;
+	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
@@ -109,13 +112,14 @@ int main(void)
 
 	/* Core still in C2 mode. */
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
+	clk_sys_udelay(GPIO_TOGGLE_DELAY);
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
+	clk_sys_udelay(GPIO_TOGGLE_DELAY);
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 
 	/* Set another alarm 1 second from now. */
-	qm_rtc_set_alarm(QM_RTC_0,
-			 QM_RTC[QM_RTC_0].rtc_ccvr + (QM_RTC_ALARM_SECOND));
-
+	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
+				       (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1)));
 	/*
 	 * The RTC clock resides in a different clock domain
 	 * to the system clock.
@@ -124,8 +128,8 @@ int main(void)
 	 * If an entry to sleep is initiated without waiting for the
 	 * transaction to complete the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_SCSS_AON[0].aonc_cnt;
-	while (QM_SCSS_AON[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
+	aonc_start = QM_AONC[0].aonc_cnt;
+	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
 	/*
@@ -154,7 +158,9 @@ int main(void)
 
 	/* Core still in C2LP mode. */
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
+	clk_sys_udelay(GPIO_TOGGLE_DELAY);
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
+	clk_sys_udelay(GPIO_TOGGLE_DELAY);
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 
 	return 0;

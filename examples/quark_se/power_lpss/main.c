@@ -28,29 +28,23 @@
  */
 
 /*
- * Low Power Sensing Standby (LPSS) State example.
+ * Low Power Sensing Standby (LPSS) State
  *
- * This application must run in conjonction with its Sensor Subsystem
- * counterpart located in /examples/sensor/power_lpss/.
+ * This application must run in conjunction with its Sensor Subsystem
+ * counterpart located in examples/sensor/power_lpss/.
  *
- * This app requires an Intel(R) Quark(TM) SE development platform
- * to be set up with a jumper cable connecting the
- * pins listed below so the output pin can trigger an interrupt on the
- * input pin. PIN_OUT will be configured as an output pin and PIN_INTR will be
- * configured as an input pin with interrupts enabled.
- * The PIN_INTR will be triggered PIN_OUT from the power_lpss application
- * running on the Sensor Subsystem to initiate a state transition
- * on the host core.
+ * The Sensor Subsystem will wake up from LPSS into SS0. The x86 core will
+ * remain in C2/C2LP and the sensor subsystem will trigger an interrupt via
+ * GPIO to make it transition to C0. Sensor collaboration is needed as LPSS can
+ * only be achieved as a combination of the two cores states.
  *
- * The Sensor Subsystem will wake up from LPSS into SS0.
- * The x86 core will remain in C2/C2LP and the sensor subsystem
- * will trigger an interrupt via GPIO to make it transition to C0.
- *
- * On Intel(R) Quark(TM) SE development platform, PIN_OUT and PIN_INTR
- * are located on header J15 PIN 42 and 40.
- *
- * Sensor collaboration is needed as LPSS can only be achieved
- * as a combination of the two cores states.
+ * This app requires an Intel(R) Quark(TM) SE development platform to be set up
+ * with a jumper cable connecting the pins listed below so the output pin can
+ * trigger an interrupt on the input pin. PIN_OUT will be configured as an
+ * output pin and PIN_INTR will be configured as an input pin with interrupts
+ * enabled. The PIN_INTR will trigger PIN_OUT from the power_lpss application
+ * running on the Sensor Subsystem to initiate a state transition on the host
+ * core. PIN_OUT and PIN_INTR are located on header J15 pins 42 and 40.
  *
  * States executed in this example are:
  * LPSS: Combination of C2/C2LP and SS2 (Sensor state)
@@ -62,6 +56,7 @@
 #include "qm_interrupt.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "ss_init.h"
 
 #define PIN_OUT (0)
 #define PIN_INTR (3)
@@ -71,15 +66,15 @@ int main(void)
 {
 	qm_gpio_port_config_t cfg;
 
-	QM_PUTS("Starting: Power LPSS example.");
+	sensor_activation();
+
+	QM_PUTS("Starting: Power LPSS");
 
 	/* Set GPIO pin muxing. */
 	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
 	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
 
-	/*
-	 * Request IRQ and write GPIO port config.
-	 */
+	/* Request IRQ and write GPIO port config. */
 	cfg.direction = BIT(PIN_OUT);     /* Set PIN_OUT as output. */
 	cfg.int_en = BIT(PIN_INTR);       /* Interrupt enabled. */
 	cfg.int_type = BIT(PIN_INTR);     /* Edge sensitive interrupt. */
@@ -95,9 +90,9 @@ int main(void)
 
 	QM_PUTS("Go to LPSS with x86 core in C2.");
 
-	/* Wait for host to be in C2 before going to LPSS. */
-	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY)) {
-	}
+	/* Wait for the Sensor Subsystem to be ready to transition to LPSS. */
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY))
+		;
 
 	/*
 	 * Go to C2. Sensor Subsystem will perform the transition to LPSS.
@@ -110,8 +105,8 @@ int main(void)
 	QM_PUTS("Go to LPSS with x86 core in C2LP.");
 
 	/* Wait for the Sensor Subsystem to be ready to transition to LPSS. */
-	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY)) {
-	}
+	while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY))
+		;
 
 	/*
 	 * Go to C2LP. Sensor Subsystem will perform the transition to LPSS.
@@ -121,7 +116,7 @@ int main(void)
 
 	QM_PUTS("Wake up from LPSS.");
 
-	QM_PUTS("Finished: Power LPSS example.");
+	QM_PUTS("Finished: Power LPSS");
 
 	return 0;
 }

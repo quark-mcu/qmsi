@@ -38,7 +38,7 @@ APP_DIR := .
 
 ifeq ($(SOC),quark_se)
 ifneq ($(TARGET),sensor)
-$(error Supported TARGET values are 'sensor')
+$(error Supported TARGET value is 'sensor')
 endif
 endif
 

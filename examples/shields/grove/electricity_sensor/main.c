@@ -26,32 +26,50 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
+/*
+ * Grove Electricity sensor app example.
+ *
+ * This application works with shield and Grove electricity sensor TA12-200.
+ * The example assumes that the sensor is connected to A0 on Grove shield.
+ *
+ * More details can be found at:
+ * http://www.seeedstudio.com/wiki/Grove_-_Electricity_Sensor
+ *
+ * This application makes use of a ring buffer to store data from the ADC in
+ * continuous conversion mode. The interrupt handler is overriden with an ISR
+ * specific for continuous conversion. The application stops with a failure
+ * whenever the ring buffer overflows or the ADC meets an error. This example
+ * uses single channel conversion.
+ *
+ * On the Intel(R) Quark(TM) SE this app uses the sensor subsystem.
+ */
+
 #include "qm_interrupt.h"
-#include "rb.h"
 #include "qm_pinmux.h"
+#include "ring_buffer.h"
 
 #if (QUARK_SE)
-#include "qm_ss_adc.h"
-#include "qm_uart.h"
-#include "ss_clk.h"
 #include "qm_common.h"
 #include "qm_isr.h"
-#include "qm_ss_isr.h"
+#include "qm_ss_adc.h"
 #include "qm_ss_interrupt.h"
-#endif
+#include "qm_ss_isr.h"
+#include "qm_uart.h"
+#include "ss_clk.h"
 
-#if (QUARK_D2000)
-#include "qm_adc.h"
+#elif(QUARK_D2000)
 #include "clk.h"
+#include "qm_adc.h"
 #endif
 
 #define QM_ADC_CMD_STOP_CONT (5)
 #define NUM_CHANNELS (1)
-#define NUM_SAMPLES (NUM_CHANNELS * 5)
+#define SAMPLE_SIZE (NUM_CHANNELS * 5)
 #define ADC_BUFFER_SIZE (128)
-#define MAX_SAMPLES (5000)
+#define NUM_SAMPLES (5000)
 #define ADC_SAMPLE_SHIFT (11)
-#define MAX_RUN (1000)
+#define NUM_RUN (1000)
 #define FRACTION_PRECISION (100)
 
 /* Following defines are used for computing the ampere. */
@@ -63,86 +81,186 @@
 
 #if (QUARK_SE)
 #define WAIT_CYCLES_BEFORE_START_SAMPLING (50)
-#endif
 
-#if (QUARK_D2000)
+#elif(QUARK_D2000)
 #define WAIT_CYCLES_BEFORE_START_SAMPLING (20)
-#endif
-
-QM_ISR_DECLARE(adc_0_continuous_isr);
-
-static int setup_adc(void);
-static int init_tasks(void);
-static void run_tasks(void);
-static void cleanup_tasks(void);
-static void print_float(float input);
-static int start_irq_conversion(void);
-
-#if (QUARK_SE)
-static void error_callback(void *data, int error, qm_ss_adc_status_t status,
-			   qm_ss_adc_cb_source_t source);
-#endif
-
-#if (QUARK_D2000)
-static void error_callback(void *data, int error, qm_adc_status_t status,
-			   qm_adc_cb_source_t source);
-static void adc_continuous_isr_handler(const qm_adc_t adc);
 #endif
 
 static ring_buffer_t rb;
 static uint16_t adc_buffer[ADC_BUFFER_SIZE];
 volatile bool acq_error = false;
-static uint16_t samples[NUM_SAMPLES];
+static uint16_t samples[SAMPLE_SIZE];
 
 #if (QUARK_SE)
 static qm_ss_adc_xfer_t xfer;
 static qm_ss_adc_channel_t channels[] = {QM_SS_ADC_CH_10};
-#endif
 
-#if (QUARK_D2000)
+#elif(QUARK_D2000)
 static qm_adc_xfer_t xfer;
 static qm_adc_channel_t channels[] = {QM_ADC_CH_3};
 #endif
 
-/*
- * QMSI based bare metal electricity sensor via ADC
- * Continuous Conversion.
- *
- * This application works with shield and Grove electricity
- * sensor TA12-200. The example assumes that the sensor is
- * connected to A0 on Grove shield. More details could be found on
- * http://www.seeedstudio.com/wiki/Grove_-_Electricity_Sensor
- *
- * This application makes use of a ring buffer
- * to store data from the ADC.
- *
- * The ADC is used in continuous conversion mode.
- *
- * The interrupt handler is overriden with an ISR
- * specific for continuous conversion.
- *
- * The application stops with a failure whenever
- * the ring buffer overflows or the ADC meets an error.
- *
- * This example uses single channel conversion.
- * For Quark SE it uses the sensor subsystem.
- */
-
-int main(void)
+#if (QUARK_SE)
+/* ISR for ADC 0 continuous conversion. */
+QM_ISR_DECLARE(adc_0_continuous_isr)
 {
-	QM_PUTS("Starting: Current measurement");
+	uint32_t i, controller = QM_SS_ADC_BASE;
 
-	acq_error = init_tasks();
-
-	if (!acq_error) {
-		run_tasks();
+	/* Read the samples into the array. */
+	for (i = 0; i < SAMPLE_SIZE; ++i) {
+		/* Pop one sample into the sample register. */
+		QM_SS_REG_AUX_OR(controller + QM_SS_ADC_SET,
+				 QM_SS_ADC_SET_POP_RX);
+		/* Add the sample to the ring buffer. */
+		rb_add(&rb, __builtin_arc_lr(controller + QM_SS_ADC_SAMPLE) >>
+				(ADC_SAMPLE_SHIFT - QM_SS_ADC_RES_12_BITS));
 	}
 
-	cleanup_tasks();
+	/* Clear the data available status register. */
+	QM_SS_REG_AUX_OR(controller + QM_SS_ADC_CTRL,
+			 QM_SS_ADC_CTRL_CLR_DATA_A);
+}
 
-	QM_PUTS("Finished: Current measurement");
+#elif(QUARK_D2000)
+/*
+ * This is the ISR handler for continuous conversion. It gets called
+ * periodically whenever FIFO is full with samples.  This routine checks if the
+ * FIFO status and flags error or copies the samples to the ring buffer. The
+ * ring buffer is then processed in main() whenever FIFO is getting filled by
+ * the ADC driver.
+ */
+static void adc_continuous_isr_handler(const qm_adc_t adc)
+{
+	uint32_t int_status, i, samples_to_read;
 
-	return 0;
+	int_status = QM_ADC[adc].adc_intr_status;
+
+	/* FIFO overrun interrupt. */
+	if (int_status & QM_ADC_INTR_STATUS_FO) {
+		/* Stop the transfer. */
+		QM_ADC[adc].adc_cmd = QM_ADC_CMD_STOP_CONT;
+		/* Disable all interrupts. */
+		QM_ADC[adc].adc_intr_enable = 0;
+		/* Call the user callback. */
+		xfer.callback(xfer.callback_data, -EIO, QM_ADC_OVERFLOW,
+			      QM_ADC_TRANSFER);
+	}
+
+	/* Continuous mode command complete interrupt. */
+	if (int_status & QM_ADC_INTR_STATUS_CONT_CC) {
+		/* Clear the interrupt. */
+		QM_ADC[adc].adc_intr_status &= QM_ADC_INTR_STATUS_CONT_CC;
+
+		/* Calculate the number of samples to read. */
+		samples_to_read = QM_ADC[adc].adc_fifo_count;
+
+		/* Copy data from FIFO to ring buffer. */
+		for (i = 0; i < samples_to_read; i++) {
+			rb_add(&rb, QM_ADC[adc].adc_sample);
+		}
+	}
+}
+
+/* Register the ISR handler for ADC 0 continuous conversion. */
+QM_ISR_DECLARE(adc_0_continuous_isr)
+{
+	adc_continuous_isr_handler(QM_ADC_0);
+	QM_ISR_EOI(QM_IRQ_ADC_0_VECTOR);
+}
+#endif /* QUARK D2000. */
+
+/*
+ * The following function is a callback that gets called when ADC error occurs.
+ * The function sets the acq_error to TRUE.  This in turn would break the while
+ * loop in main().
+ */
+#if (QUARK_SE)
+static void error_callback(void *data, int error, qm_ss_adc_status_t status,
+			   qm_ss_adc_cb_source_t source)
+
+#elif(QUARK_D2000)
+static void error_callback(void *data, int error, qm_adc_status_t status,
+			   qm_adc_cb_source_t source)
+#endif
+{
+	if (error) {
+		QM_PUTS("Error: ADC conversion failed");
+		QM_PRINTF("Status: 0x%x, source: 0x%x\n", status, source);
+		acq_error = true;
+	}
+}
+
+static int start_irq_conversion(void)
+{
+#if (QUARK_D2000)
+	/* Register the ISR routine. */
+	qm_irq_request(QM_IRQ_ADC_0, adc_0_continuous_isr);
+#endif
+
+	/* Set up xfer. */
+	xfer.ch = channels;
+	xfer.ch_len = NUM_CHANNELS;
+	xfer.samples = samples;
+	xfer.samples_len = SAMPLE_SIZE;
+	xfer.callback = error_callback;
+
+#if (QUARK_SE)
+	return qm_ss_adc_irq_convert(QM_SS_ADC_0, &xfer);
+#elif(QUARK_D2000)
+	return qm_adc_irq_convert(QM_ADC_0, &xfer);
+#endif
+}
+
+static int setup_adc(void)
+{
+#if (QUARK_SE)
+	qm_ss_adc_config_t cfg;
+
+	/* Enable the ADC and set the clock divisor. */
+	ss_clk_adc_enable();
+	ss_clk_adc_set_div(100);
+
+	/* Set up pinmux. */
+	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_1);
+	qm_pmux_input_en(QM_PIN_ID_10, true);
+
+	/* Request the necessary IRQs. */
+	qm_ss_irq_request(QM_SS_IRQ_ADC_IRQ, adc_0_continuous_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_ERR, qm_ss_adc_0_err_isr);
+
+	/* Set the mode and calibrate. */
+	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_NORM_CAL);
+	qm_ss_adc_calibrate(QM_SS_ADC_0);
+
+	/* Set up config. */
+	cfg.window = WAIT_CYCLES_BEFORE_START_SAMPLING;
+	cfg.resolution = QM_SS_ADC_RES_12_BITS;
+
+	return qm_ss_adc_set_config(QM_SS_ADC_0, &cfg);
+
+#elif(QUARK_D2000)
+	qm_adc_config_t cfg;
+
+	/* Enable the ADC and set the clock divisor. */
+	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_ADC |
+			  CLK_PERIPH_ADC_REGISTER);
+	clk_adc_set_div(100); /* ADC clock is 320KHz @ 32MHz. */
+
+	/* Set up pinmux. */
+	qm_pmux_select(QM_PIN_ID_3, QM_PMUX_FN_1);
+	qm_pmux_input_en(QM_PIN_ID_3, true);
+
+	/* Set the mode and calibrate. */
+	qm_adc_set_mode(QM_ADC_0, QM_ADC_MODE_NORM_CAL);
+	qm_adc_calibrate(QM_ADC_0);
+
+	/* Set up config. */
+	cfg.window = WAIT_CYCLES_BEFORE_START_SAMPLING;
+	cfg.resolution = QM_ADC_RES_12_BITS;
+
+	return qm_adc_set_config(QM_ADC_0, &cfg);
+
+#endif /* QUARK D2000. */
 }
 
 static int init_tasks(void)
@@ -169,6 +287,19 @@ static int init_tasks(void)
 	return status_ret;
 }
 
+/* Function computes the decimal and fractional part and prints. */
+static void print_float(float input)
+{
+	uint32_t decimal_part;
+	float fraction_part;
+
+	decimal_part = (uint16_t)input;
+	fraction_part = input - (float)decimal_part;
+
+	QM_PRINTF("Effective Current (Amp.): %d.%d\n", decimal_part,
+		  (uint16_t)(fraction_part * FRACTION_PRECISION));
+}
+
 static void run_tasks(void)
 {
 	uint16_t val;
@@ -176,10 +307,9 @@ static void run_tasks(void)
 	float amplitude_current, effective_value;
 
 	/*
-	 * Following while loop continues until error occurs or
-	 * it reaches pre-defined MAX_RUN value.
+	 * Continue until error occurs or it reaches pre-defined MAX_RUN value.
 	 */
-	while ((!acq_error) && (num_of_runs < MAX_RUN)) {
+	while ((!acq_error) && (num_of_runs < NUM_RUN)) {
 		/*
 		 * Initialize the values to ensure no miscalculations and actual
 		 * results.
@@ -188,21 +318,20 @@ static void run_tasks(void)
 		sample_threshold = 0;
 
 		/*
-		 * Following while loop continues until predefined samples are
-		 * captured for more accurate result.
+		 * Continue until predefined samples are captured for more
+		 * accurate result.
 		 */
-		while (sample_threshold < MAX_SAMPLES) {
+		while (sample_threshold < NUM_SAMPLES) {
 			if (rb.overflow) {
 				QM_PUTS("Error: Ring Buffer Overflow!");
 				acq_error = true;
 				break;
 			}
 			/*
-			 * Following while loop gets the maximum sample value
-			 * from ring buffer (which is filled in the ISR). The
-			 * conversion formula for Grove Electricity sensor
-			 * v1.0 is applied to find the amplitude and effective
-			 * current.
+			 * Get the maximum sample value from ring buffer (which
+			 * is filled in the ISR). The conversion formula for
+			 * Grove Electricity sensor v1.0 is applied to find the
+			 * amplitude and effective current.
 			 */
 			while (!rb_is_empty(&rb)) {
 				rb_get(&rb, &val);
@@ -234,180 +363,6 @@ static void run_tasks(void)
 	}
 }
 
-static int setup_adc(void)
-{
-#if (QUARK_SE)
-	qm_ss_adc_config_t cfg;
-
-	/* Enable the ADC and set the clock divisor. */
-	ss_clk_adc_enable();
-	ss_clk_adc_set_div(100);
-
-	/* Set up pinmux. */
-	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_10, true);
-
-	/* Request the necessary IRQs. */
-	qm_ss_irq_request(QM_SS_IRQ_ADC_IRQ, adc_0_continuous_isr);
-	qm_ss_irq_request(QM_SS_IRQ_ADC_ERR, qm_ss_adc_0_err_isr);
-
-	/* Set the mode and calibrate. */
-	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_NORM_CAL);
-	qm_ss_adc_calibrate(QM_SS_ADC_0);
-
-	/* Set up config. */
-	cfg.window = WAIT_CYCLES_BEFORE_START_SAMPLING;
-	cfg.resolution = QM_SS_ADC_RES_12_BITS;
-
-	return qm_ss_adc_set_config(QM_SS_ADC_0, &cfg);
-#endif /* QUARK SE */
-
-#if (QUARK_D2000)
-	qm_adc_config_t cfg;
-
-	/* Enable the ADC and set the clock divisor. */
-	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_ADC |
-			  CLK_PERIPH_ADC_REGISTER);
-	clk_adc_set_div(100); /* ADC clock is 320KHz @ 32MHz. */
-
-	/* Set up pinmux. */
-	qm_pmux_select(QM_PIN_ID_3, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_3, true);
-
-	/* Set the mode and calibrate. */
-	qm_adc_set_mode(QM_ADC_0, QM_ADC_MODE_NORM_CAL);
-	qm_adc_calibrate(QM_ADC_0);
-
-	/* Set up config. */
-	cfg.window = WAIT_CYCLES_BEFORE_START_SAMPLING;
-	cfg.resolution = QM_ADC_RES_12_BITS;
-
-	return qm_adc_set_config(QM_ADC_0, &cfg);
-
-#endif /* QUARK D2000 */
-}
-
-static int start_irq_conversion(void)
-{
-#if (QUARK_D2000)
-	/* Register the ISR routine. */
-	qm_irq_request(QM_IRQ_ADC_0, adc_0_continuous_isr);
-#endif
-
-	/* Set up xfer. */
-	xfer.ch = channels;
-	xfer.ch_len = NUM_CHANNELS;
-	xfer.samples = samples;
-	xfer.samples_len = NUM_SAMPLES;
-	xfer.callback = error_callback;
-
-#if (QUARK_SE)
-	return qm_ss_adc_irq_convert(QM_SS_ADC_0, &xfer);
-#endif
-
-#if (QUARK_D2000)
-	return qm_adc_irq_convert(QM_ADC_0, &xfer);
-#endif
-}
-
-#if (QUARK_SE)
-/* ISR for ADC 0 continuous conversion. */
-QM_ISR_DECLARE(adc_0_continuous_isr)
-{
-	uint32_t i, controller = QM_SS_ADC_BASE;
-
-	/* Read the samples into the array. */
-	for (i = 0; i < NUM_SAMPLES; ++i) {
-		/* Pop one sample into the sample register. */
-		QM_SS_REG_AUX_OR(controller + QM_SS_ADC_SET,
-				 QM_SS_ADC_SET_POP_RX);
-		/* Add the sample to the ring buffer. */
-		rb_add(&rb, __builtin_arc_lr(controller + QM_SS_ADC_SAMPLE) >>
-				(ADC_SAMPLE_SHIFT - QM_SS_ADC_RES_12_BITS));
-	}
-
-	/* Clear the data available status register. */
-	QM_SS_REG_AUX_OR(controller + QM_SS_ADC_CTRL,
-			 QM_SS_ADC_CTRL_CLR_DATA_A);
-}
-#endif /* QUARK SE */
-
-/*
- * The following function is a callback that gets called when ADC
- * error occurs. The function sets the acq_error to TRUE.
- * This in turn would break the while loop in main().
- */
-#if (QUARK_SE)
-static void error_callback(void *data, int error, qm_ss_adc_status_t status,
-			   qm_ss_adc_cb_source_t source)
-#endif
-
-#if (QUARK_D2000)
-    static void error_callback(void *data, int error, qm_adc_status_t status,
-			       qm_adc_cb_source_t source)
-#endif
-{
-	if (error) {
-		QM_PUTS("Error: ADC conversion failed");
-		QM_PRINTF("Status: 0x%x, source: 0x%x\n", status, source);
-		acq_error = true;
-	}
-}
-
-#if (QUARK_D2000)
-/*
- * Following macro registers the ISR handler for ADC 0
- * continuous conversion.
- */
-QM_ISR_DECLARE(adc_0_continuous_isr)
-{
-	adc_continuous_isr_handler(QM_ADC_0);
-	QM_ISR_EOI(QM_IRQ_ADC_0_VECTOR);
-}
-
-/*
- * This is the ISR handler for continuous conversion.  It gets
- * called periodically whenever FIFO is full with samples.
- * This routine checks if the FIFO status and flags error or
- * copies the samples to the ring buffer. The ring buffer is then
- * processed in main() whenever FIFO is getting filled by the ADC driver.
- */
-static void adc_continuous_isr_handler(const qm_adc_t adc)
-{
-	uint32_t int_status, i, samples_to_read;
-
-	int_status = QM_ADC[adc].adc_intr_status;
-
-	/* FIFO overrun interrupt. */
-	if (int_status & QM_ADC_INTR_STATUS_FO) {
-		/* Stop the transfer. */
-		QM_ADC[adc].adc_cmd = QM_ADC_CMD_STOP_CONT;
-		/* Disable all interrupts. */
-		QM_ADC[adc].adc_intr_enable = 0;
-		/* Call the user callback. */
-		xfer.callback(xfer.callback_data, -EIO, QM_ADC_OVERFLOW,
-			      QM_ADC_TRANSFER);
-	}
-
-	/* Continuous mode command complete interrupt. */
-	if (int_status & QM_ADC_INTR_STATUS_CONT_CC) {
-		/* Clear the interrupt. */
-		QM_ADC[adc].adc_intr_status &= QM_ADC_INTR_STATUS_CONT_CC;
-
-		/* Calculate the number of samples to read. */
-		samples_to_read = QM_ADC[adc].adc_fifo_count;
-
-		/*
-		 * Copy data from FIFO to ring buffer for computation in main()
-		 * function.
-		 */
-		for (i = 0; i < samples_to_read; i++) {
-			rb_add(&rb, QM_ADC[adc].adc_sample);
-		}
-	}
-}
-#endif /* QUARK D2000 */
-
 static void cleanup_tasks(void)
 {
 #if (QUARK_SE)
@@ -421,9 +376,8 @@ static void cleanup_tasks(void)
 
 	/* Shut the ADC down. */
 	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_PWR_DOWN);
-#endif
 
-#if (QUARK_D2000)
+#elif(QUARK_D2000)
 	/* Stop the transfer. */
 	QM_ADC[0].adc_cmd = QM_ADC_CMD_STOP_CONT;
 
@@ -440,18 +394,19 @@ static void cleanup_tasks(void)
 #endif
 }
 
-/*
- * The following function prints float value.
- * It computes the decimal and fractional part and prints.
- */
-static void print_float(float input)
+int main(void)
 {
-	uint32_t decimal_part;
-	float fraction_part;
+	QM_PUTS("Starting: Electricity sensor");
 
-	decimal_part = (uint16_t)input;
-	fraction_part = input - (float)decimal_part;
+	acq_error = init_tasks();
 
-	QM_PRINTF("Effective Current (Amp.): %d.%d\n", decimal_part,
-		  (uint16_t)(fraction_part * FRACTION_PRECISION));
+	if (!acq_error) {
+		run_tasks();
+	}
+
+	cleanup_tasks();
+
+	QM_PUTS("Finished: Electricity sensor");
+
+	return 0;
 }

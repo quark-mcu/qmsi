@@ -27,16 +27,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "power_states.h"
-#include "qm_common.h"
-#include "qm_interrupt.h"
-#include "qm_pic_timer.h"
-#include "qm_isr.h"
-#include "qm_rtc.h"
-
-/* POWER CORE app example
+/*
+ * QMSI Power core app example.
  *
  * This example demonstrates core states.
+ *
  * The core is woken up by the PIC timer.
  *
  * States executed in this example are:
@@ -44,71 +39,75 @@
  * C2: Processor clock gated, gateway to LPSS state
  * C2LP: Processor complex clock gated
  */
-static void timer_expired(void *data);
+
+#include "power_states.h"
+#include "qm_common.h"
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_pic_timer.h"
+#include "qm_rtc.h"
 
 int main(void)
 {
-	qm_pic_timer_config_t pic_conf;
+	qm_pic_timer_config_t pic_cfg;
 	qm_rtc_config_t rtc_cfg;
 
-	QM_PUTS("Starting: Power Core example");
+	QM_PUTS("Starting: Power Core");
 
-	/* PIC timer to wake up from C1/C2/C2LP */
-	pic_conf.mode = QM_PIC_TIMER_MODE_PERIODIC;
-	pic_conf.int_en = true;
-	pic_conf.callback = timer_expired;
+	/* PIC timer to wake up from C1/C2/C2LP. */
+	pic_cfg.mode = QM_PIC_TIMER_MODE_PERIODIC;
+	pic_cfg.int_en = true;
+	pic_cfg.callback = NULL;
+	pic_cfg.callback_data = NULL;
 
 	qm_int_vector_request(QM_INT_VECTOR_PIC_TIMER, qm_pic_timer_isr);
 
-	qm_pic_timer_set_config(&pic_conf);
+	qm_pic_timer_set_config(&pic_cfg);
 
-	/* Set period.  The following value generates one interrupt per second
-	 * with a 32MHz sysclk.
-	 */
+	/* One interrupt per second with a 32MHz sysclk. */
 	qm_pic_timer_set(0x2000000);
 
-	QM_PUTS("Go to c1.");
+	QM_PUTS("Go to C1.");
+
 	/* Halt the CPU, PIC TIMER INT will wake me up. */
 	power_cpu_c1();
-	QM_PUTS("Wake up from c1.");
 
-	QM_PUTS("Go to c2.");
-	/* Go to c2, PIC TIMER INT will wake me up. */
+	QM_PUTS("Wake up from C1.\nGo to C2.");
+
+	/* Go to C2, PIC TIMER INT will wake me up. */
 	power_cpu_c2();
-	QM_PUTS("Wake up from c2.");
+
+	QM_PUTS("Wake up from C2.");
 
 	/*
-	 * C2 Low Power state disable the LAPIC which
-	 * disables as well usage of the PIC timer.
-	 * Disable PIC timer and use RTC instead to
-	 * wake up from C2LP.
+	 * C2 Low Power state disables the LAPIC which also disables the usage
+	 * of the PIC timer. Disable PIC timer and use RTC instead to wake up
+	 * from C2LP.
 	 */
 
 	/* Remove PIC timer interrupts. */
-	pic_conf.int_en = false;
-	qm_pic_timer_set_config(&pic_conf);
+	pic_cfg.int_en = false;
+	qm_pic_timer_set_config(&pic_cfg);
 
-	/*  Initialise RTC configuration. */
+	/* Initialise RTC configuration and request the IRQ. */
 	rtc_cfg.init_val = 0;
 	rtc_cfg.alarm_en = true;
-	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND << 2;
+	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1) << 2;
 	rtc_cfg.callback = NULL;
 	rtc_cfg.callback_data = NULL;
+	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
 
-	QM_PUTS("Go to c2lp.");
-	/* Go to c2lp, RTC will wake me up. */
-	power_cpu_c2lp();
-	QM_PUTS("Wake up from c2lp.");
+	QM_PUTS("Go to C2LP.");
 
-	QM_PUTS("Finished: Power Core example");
+	/* Go to C2LP, RTC will wake me up. */
+	power_cpu_c2lp();
+
+	QM_PUTS("Wake up from C2LP.");
+
+	QM_PUTS("Finished: Power Core");
 
 	return 0;
-}
-
-void timer_expired(void *data)
-{
-	QM_PUTS("Timer interrupt triggered");
 }

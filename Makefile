@@ -54,21 +54,12 @@ ifeq ($(filter $(TARGET),$(SUPPORTED_TARGETS)),)
 $(error TARGET=$(TARGET) is not supported for $(SOC). Run 'make help' for help)
 endif
 
-SOC_ROOT_DIR = $(SOC)
-ifeq ($(TARGET), sensor)
-SOC_MAKEFILE = $(TARGET)
 RULES = libqmsi
-else
-SOC_MAKEFILE = $(SOC)
-RULES = libqmsi rom
-endif
 
 BASE_DIR = .
 
 include $(BASE_DIR)/base.mk
-include $(BASE_DIR)/bootloader/bootloader.mk
-include $(BASE_DIR)/soc/$(SOC_ROOT_DIR)/$(SOC_MAKEFILE).mk
-include $(BASE_DIR)/soc/$(SOC_ROOT_DIR)/rom/rom.mk
+include $(BASE_DIR)/soc/$(SOC)/$(SOC).mk
 include $(BASE_DIR)/drivers/libqmsi.mk
 
 .PHONY: help targets distclean
@@ -79,7 +70,6 @@ targets:
 help:
 	$(info )
 	$(info List of build targets. By default all targets are built.)
-	$(info rom      - Build the ROM firmware)
 	$(info libqmsi  - Build the libqmsi package)
 	$(info targets  - List the targets available for SOC)
 	$(info )
@@ -98,23 +88,18 @@ help:
 	$(info )
 	$(info List of supported values for SOC: $(SUPPORTED_SOCS))
 	$(info List of supported values for CSTD: c90 and c99)
-	$(info )
-	$(info To disable starting ARC on Quark SE, compile the ROM with the)
-	$(info following:)
-	$(info START_ARC=0)
-	$(info By default, START_ARC=1)
 
 all: $(RULES)
 
 distclean:
 	$(MAKE) -C doc/ clean
 	$(foreach soc, $(SUPPORTED_SOCS),\
-		$(foreach target, $(SUPPORTED_TARGETS_$(soc)),\
-			$(foreach build, $(SUPPORTED_BUILDS),\
-				$(MAKE) SOC=$(soc) TARGET=$(target) BUILD=$(build)\
-					realclean $(END_CMD))))
+	$(foreach target, $(SUPPORTED_TARGETS_$(soc)),\
+	$(foreach build, $(SUPPORTED_BUILDS),\
+		$(MAKE) SOC=$(soc) TARGET=$(target) BUILD=$(build)\
+			realclean $(END_CMD))))
 	$(foreach soc, $(SUPPORTED_SOCS),\
-		$(foreach target, $(SUPPORTED_TARGETS_$(soc)),\
-			$(foreach build, $(SUPPORTED_BUILDS),\
-				$(MAKE) SOC=$(soc) TARGET=$(target) BUILD=$(build)\
-					-C examples realclean $(END_CMD))))
+	$(foreach target, $(SUPPORTED_TARGETS_$(soc)),\
+	$(foreach build, $(SUPPORTED_BUILDS),\
+		$(MAKE) SOC=$(soc) TARGET=$(target) BUILD=$(build) -C examples\
+			realclean $(END_CMD))))

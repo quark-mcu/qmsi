@@ -33,12 +33,17 @@ APP_NAME = mailbox
 
 SOC ?= quark_se
 ifneq ($(SOC),quark_se)
-$(error Supported SOC values is 'quark_se')
+$(error Supported SOC value is 'quark_se')
 endif
 
 TARGET ?= x86
 BASE_DIR := ../..
 APP_DIR := .
+ifeq ($(TARGET),sensor)
+CFLAGS += -DSTDOUT_UART_INIT_DISABLE
+endif
+
+CFLAGS += -I$(BASE_DIR)/examples/include
 
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

@@ -27,75 +27,75 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Always-on (AON) Counters
+ *
+ * This app first reads the value of the counter and prints it. It then
+ * configures the periodic timer to fire a number of times resulting in the
+ * callback function being invoked. Finally it prints the number of times
+ * the callback was invoked.
+ */
+
 #include "qm_aon_counters.h"
 #include "qm_interrupt.h"
 #include "qm_isr.h"
 
-#include <inttypes.h>
+#define NUM_CALLBACKS (5)
 
-/* QMSI Always-on Counters app example */
-static volatile uint32_t ticks;
-/* Example callback function */
-static void aonpt_example_callback();
+static volatile uint32_t callback_count;
 
-#define MAX_TICKS (5)
+/* Always-on periodic timer example callback function. */
+static void aonpt_example_callback()
+{
+	++callback_count;
+
+	/* Clear the timer so it can fire again. */
+	qm_aonpt_clear(QM_AONC_0);
+}
 
 int main(void)
 {
 	uint32_t c_val = 0, pt_val = 0;
 	qm_aonpt_config_t cfg;
 
-	QM_PUTS("Starting: Always-on Counter\n");
+	QM_PUTS("Starting: Always-on Counter");
 
-	/* Always-on Counter enable, disable and read value */
-	qm_aonc_disable(QM_SCSS_AON_0);
-	qm_aonc_enable(QM_SCSS_AON_0);
+	/* Always-on Counter enable and read value. */
+	qm_aonc_enable(QM_AONC_0);
 
-	qm_aonc_get_value(QM_SCSS_AON_0, &c_val);
-	if (c_val) {
+	if (qm_aonc_get_value(QM_AONC_0, &c_val) == 0) {
 		QM_PRINTF("Always-on Counter value: %u\n", c_val);
 	} else {
-		QM_PRINTF("Error: Could not read aonc value\n");
+		QM_PUTS("Error: Could not read aonc value.");
 	}
 
-	/* Request an IRQ and write the Always-on Periodic Timer config */
-	cfg.count = 0x10000;
-	cfg.int_en = true;
+	/* Request an IRQ and write the Always-on Periodic Timer config. */
+	cfg.count = 0x1000; /* 0.125 seconds. */
+	cfg.int_en = true;  /* Interrupts enabled. */
 	cfg.callback = aonpt_example_callback;
 
 	qm_irq_request(QM_IRQ_AONPT_0, qm_aonpt_isr_0);
 
-	qm_aonpt_set_config(QM_SCSS_AON_0, &cfg);
+	qm_aonpt_set_config(QM_AONC_0, &cfg);
 
-	/* The AON Periodic Timer runs from the RTC clock at 32KHz (rather than
-	 * the system clock which is 32MHz) so we need to spin for a few cycles
-	 * allow the register change to propagate */
-	while (MAX_TICKS > ticks) {
-	}
+	/* Wait for the defined number of callbacks be invoked. */
+	while (NUM_CALLBACKS > callback_count)
+		;
 
-	/* Get the value of the Always-on Periodic Timer */
-	qm_aonpt_get_value(QM_SCSS_AON_0, &pt_val);
-	if (pt_val) {
+	QM_PRINTF("Periodic Timer callback fired %d times.\n", callback_count);
+
+	/* Get the value of the Always-on Periodic Timer. */
+	if (qm_aonpt_get_value(QM_AONC_0, &c_val) == 0) {
 		QM_PRINTF("Always-on Periodic Timer value: %u\n", pt_val);
 	} else {
-		QM_PRINTF("Error: Could not read Periodic timer value\n\n");
+		QM_PUTS("Error: Could not read Periodic timer value");
 	}
+
+	/* Disable the always-on periodic timer interrupt. */
 	cfg.int_en = false;
-	qm_aonpt_set_config(QM_SCSS_AON_0, &cfg);
+	qm_aonpt_set_config(QM_AONC_0, &cfg);
 
-	QM_PUTS("Finished: Always-on counter\n");
+	QM_PUTS("Finished: Always-on counter");
+
 	return 0;
-}
-
-void aonpt_example_callback()
-{
-	bool pt_status = false;
-	QM_PUTS("Periodic Timer callback\n");
-	ticks++;
-
-	/* Clear the timer so it can fire again */
-	qm_aonpt_get_status(QM_SCSS_AON_0, &pt_status);
-	if (pt_status == true) {
-		qm_aonpt_clear(QM_SCSS_AON_0);
-	}
 }

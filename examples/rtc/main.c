@@ -27,50 +27,71 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_rtc.h"
+/*
+ * Real Time Clock (RTC)
+ *
+ * This app sets up RTC to fire an interrupt every quarter second which results
+ * in the callback function being invoked. The app disables the RTC once there
+ * have been 5 callbacks.
+ */
+
 #include "qm_interrupt.h"
 #include "qm_isr.h"
+#include "qm_rtc.h"
 
-#define ALARM (QM_RTC_ALARM_MINUTE / 6)
-#define MAX_RTC_FIRINGS (5)
+#define ALARM_INTERVAL (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_4)) /* 0.25 second. */
+#define NUM_CALLBACKS (5)
 
-void rtc_example_callback(void *);
+static volatile uint32_t cb_count = 0;
+static volatile bool cb_fired = false;
 
-static volatile uint32_t rtc_fired = 0;
+/* Example RTC callback. */
+void rtc_example_callback(void *data)
+{
+	/* Set alarm to trigger again ALARM_INTERVAL after. */
+	qm_rtc_set_alarm(QM_RTC_0,
+			 (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM_INTERVAL));
 
-/*  QMSI RTC app example */
+	++cb_count;
+	cb_fired = true;
+}
+
 int main(void)
 {
-	/*  Variables */
 	qm_rtc_config_t cfg;
 
-	QM_PRINTF("Starting: RTC\n");
+	QM_PUTS("Starting: RTC");
 
-	/*  Initialise RTC configuration */
+	/* Configure RTC and request the interrupt. */
 	cfg.init_val = 0;
 	cfg.alarm_en = true;
-	cfg.alarm_val = ALARM;
+	cfg.alarm_val = ALARM_INTERVAL;
 	cfg.callback = rtc_example_callback;
 	cfg.callback_data = NULL;
+	cfg.prescaler = CLK_RTC_DIV_1;
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
 
-	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
+	/* Enable RTC. */
+	clk_periph_enable(CLK_PERIPH_RTC_REGISTER);
 
+	/* RTC actually starts here. */
 	qm_rtc_set_config(QM_RTC_0, &cfg);
 
-	/* Wait for RTC to fire 5 times and then finish. */
-	while (rtc_fired < MAX_RTC_FIRINGS) {
+	/* Wait for RTC to fire NUM_CALLBACKS times. */
+	while (cb_count < NUM_CALLBACKS) {
+		if (cb_fired) {
+			cb_fired = false;
+			QM_PRINTF("RTC alarm trigger count: %d\n", cb_count);
+		}
 	}
 
-	QM_PRINTF("Finished: RTC\n");
-	clk_periph_disable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
-	return 0;
-}
+	/* Disable RTC. */
+	clk_periph_disable(CLK_PERIPH_RTC_REGISTER);
 
-void rtc_example_callback(void *data)
-{
-	QM_PUTS("Alarm!!\n");
-	qm_rtc_set_alarm(QM_RTC_0, (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM));
-	rtc_fired++;
+	QM_PRINTF("RTC alarm triggered %d times \n", cb_count);
+
+	QM_PUTS("Finished: RTC");
+
+	return 0;
 }

@@ -36,6 +36,13 @@ TARGET ?= x86
 BASE_DIR := ../../../../
 APP_DIR := .
 
+CFLAGS += -I$(BASE_DIR)/examples/include
+
+ifeq ($(SOC),quark_se)
+ifeq ($(TARGET),x86)
+$(error Supported SOC value for Quark SE is "sensor")
+endif
+endif
 
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

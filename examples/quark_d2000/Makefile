@@ -36,7 +36,7 @@ BUILD ?= release
 SUBDIRS := $(filter %/, $(wildcard ./*/))
 
 ifneq ($(SOC),quark_d2000)
-$(error Supported SOC values are 'quark_d2000')
+$(error Supported SOC value is 'quark_d2000')
 endif
 
 all clean realclean:: $(SUBDIRS)

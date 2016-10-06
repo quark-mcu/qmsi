@@ -27,18 +27,21 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_ss_spi.h"
-#include "qm_uart.h"
-#include "qm_ss_interrupt.h"
-#include "qm_ss_isr.h"
-#include "ss_clk.h"
-
-/* Buffer size for reading CHIPID */
-#define BUFFER_SIZE (2)
-
-/* This example uses the sensor subsystem SPI block 0 to read the CHIPID
+/*
+ * Sensor Subsystem (SS) Serial Peripheral Interface (SPI)
+ *
+ * This example uses the sensor subsystem SPI block 0 to read the CHIPID
  * of the on-board BMI160 by using polled mode and interrupts.
  */
+
+#include "qm_ss_interrupt.h"
+#include "qm_ss_isr.h"
+#include "qm_ss_spi.h"
+#include "qm_uart.h"
+#include "ss_clk.h"
+
+/* Buffer size for reading CHIPID. */
+#define BUFFER_SIZE (2)
 
 volatile bool xfer_active;
 volatile int err_code;
@@ -61,11 +64,11 @@ static void spi_cb(void *data, int error, qm_ss_spi_status_t spi_status,
 
 static void spi_transfer_polled(void)
 {
-	QM_PRINTF("Info:     Reading CHIPID in polled mode.\n");
+	QM_PUTS("Reading CHIPID in polled mode.");
 
-	tx_buffer[0] = 0x80; /* Read chip ID */
+	tx_buffer[0] = 0x80; /* Read chip ID. */
 
-	/* Set up transfer values */
+	/* Set up transfer values. */
 	qm_ss_spi_transfer_t trans;
 	trans.rx = rx_buffer;
 	trans.tx = tx_buffer;
@@ -74,36 +77,36 @@ static void spi_transfer_polled(void)
 
 	err_code = 0;
 
-	/* Set SPI configuration */
+	/* Set SPI configuration. */
 	err_code = qm_ss_spi_set_config(spi, &conf);
 
-	/* Enable clock for SPI 0 */
+	/* Enable clock for SPI 0. */
 	ss_clk_spi_enable(QM_SS_SPI_0);
 
-	/* Select slave and do the actual SPI transfer */
+	/* Select slave and do the actual SPI transfer. */
 	err_code |= qm_ss_spi_slave_select(spi, select);
 	err_code |= qm_ss_spi_transfer(spi, &trans, NULL);
 
-	/* Disable clock for SPI 0 */
+	/* Disable clock for SPI 0. */
 	ss_clk_spi_disable(QM_SS_SPI_0);
 
 	if (err_code != 0) {
-		QM_PRINTF("Error:    SPI transfer failed.\n");
+		QM_PUTS("Error: SPI transfer failed.");
 	} else if (rx_buffer[1] == 0xd1) {
-		QM_PRINTF("Success:  CHIPID = 0x1d\n");
+		QM_PUTS("CHIPID = 0x1d");
 	} else {
-		QM_PRINTF("Error:    CHIPID doesn't match 0x%x != 0xd1.\n",
+		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0xd1.\n",
 			  rx_buffer[1]);
 	}
 }
 
 static void spi_transfer_irq(void)
 {
-	QM_PRINTF("Info:     Reading CHIPID in IRQ mode.\n");
+	QM_PUTS("Reading CHIPID in IRQ mode.");
 
-	tx_buffer[0] = 0x80; /* Read chip ID */
+	tx_buffer[0] = 0x80; /* Read chip ID. */
 
-	/* Set up transfer values */
+	/* Set up transfer values. */
 	qm_ss_spi_async_transfer_t irq_trans;
 	irq_trans.rx = rx_buffer;
 	irq_trans.tx = tx_buffer;
@@ -112,57 +115,57 @@ static void spi_transfer_irq(void)
 	irq_trans.callback_data = NULL;
 	irq_trans.callback = spi_cb;
 
-	/* Register interrupts */
+	/* Register interrupts. */
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_ERR_INT, qm_ss_spi_0_err_isr);
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_RX_AVAIL, qm_ss_spi_0_rx_isr);
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_TX_REQ, qm_ss_spi_0_tx_isr);
 
-	tx_buffer[0] = 0x80; /* Read chip ID */
+	tx_buffer[0] = 0x80; /* Read chip ID. */
 
 	err_code = 0;
 	xfer_active = true;
 
-	/* Set SPI configuration */
+	/* Set SPI configuration. */
 	qm_ss_spi_set_config(spi, &conf);
 
-	/* Enable clock for SPI 0 */
+	/* Enable clock for SPI 0. */
 	ss_clk_spi_enable(QM_SS_SPI_0);
 
-	/* Select slave and do the actual SPI transfer */
+	/* Select slave and do the actual SPI transfer. */
 	qm_ss_spi_slave_select(spi, select);
 	qm_ss_spi_irq_transfer(spi, &irq_trans);
 	while (xfer_active)
 		;
 
-	/* Disable clock for SPI 0 */
+	/* Disable clock for SPI 0. */
 	ss_clk_spi_disable(QM_SS_SPI_0);
 
 	if (err_code != 0) {
 		QM_PRINTF(
-		    "Error:    SPI transfer failed. (%d frames transmitted)\n",
+		    "Error: SPI transfer failed. (%d frames transmitted)\n",
 		    transfer_len);
 	} else if (rx_buffer[1] == 0xd1) {
-		QM_PRINTF("Success:  CHIPID = 0x1d\n");
+		QM_PUTS("CHIPID = 0x1d");
 	} else {
-		QM_PRINTF("Error:    CHIPID doesn't match 0x%x != 0xd1.\n",
+		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0xd1.\n",
 			  rx_buffer[1]);
 	}
 }
 
 int main(void)
 {
-	QM_PRINTF("Starting: SS SPI Example\n");
+	QM_PUTS("Starting: SS SPI");
 
-	/* Set up SPI configuration */
+	/* Set up SPI configuration. */
 	conf.frame_size = QM_SS_SPI_FRAME_SIZE_8_BIT;
 	conf.transfer_mode = QM_SS_SPI_TMOD_TX_RX;
-	conf.clk_divider = 32; /* 1MHz */
+	conf.clk_divider = 32; /* 1MHz. */
 	conf.bus_mode = QM_SS_SPI_BMODE_0;
 
 	spi_transfer_polled();
 	spi_transfer_irq();
 
-	QM_PRINTF("Finished: SS SPI Example\n");
+	QM_PUTS("Finished: SS SPI");
 
 	return 0;
 }

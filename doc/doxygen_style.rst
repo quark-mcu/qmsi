@@ -99,9 +99,9 @@ Sample Struct
           uint32_t int_debounce; /**< Debounce on/off. */
           /**
            * Rising / Falling edge interrupt. Interrupt can be set to
-             trigger on both rising and falling edges.
+           * trigger on both rising and falling edges.
            * This option is user selectable <insert more text here>.
-             (This demonstrates a member variable with a long
+           * (This demonstrates a member variable with a long
            * description.)
            */
           uint32_t int_bothedge;

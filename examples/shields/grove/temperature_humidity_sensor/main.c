@@ -27,101 +27,63 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_common.h"
-#include "qm_interrupt.h"
-#include "qm_i2c.h"
-#include "qm_pinmux.h"
-#include "qm_isr.h"
-#include "qm_version.h"
-#include "qm_identification.h"
-#include "clk.h"
-#include "hdc1000_device.h"
-#include "utils.h"
-#include "hdc1000_bus.h"
-
 /*
- * HDC1000 sensor device example.
+ * Grove shield temperature/humidity sensor app example.
  *
- * This example requires the BASE SHIELD(v2) by Seeed Studio and
- * HDC1000 sensor of TI.
+ * This example requires the BASE SHIELD(v2) by Seeed Studio and the
+ * HDC1000 sensor from TI. The BASE SHIELD(v2) is Arduino compatible,
+ * and so can be attached to the Quark Microcontroller D2000 and
+ * SE Development Platforms.
  *
- * The BASE SHIELD(v2) is arduino compatible, hence can be
- * attached to the Quark Microcontroller D2000 and SE Development
- * Platforms.
- *
- * HDC1000 sensor is an I2C device which has the capability
+ * The HDC1000 sensor is an I2C device which has the capability
  * to provide real time temperature and humidity data.
  *
- * The temperature value read from the sensor need to apply
- * specific formula to convert to degree Celsius.
- * Same applies to humidity data for values in relative humidity.
- *
- * Following are the sequence of operations carried out
- * in the application:-
- * 1.Initialize the I2C controller for the sensor access.
- * 2.Read the unique ID's like Manufacturer, Device and Serial
- * 3.Configure the device for the measurement.
- * 4.Read the real time sensor data periodically and
- *   displays through console.
+ * The temperature value read from the sensor is converted to
+ * degrees Celsius, with the same applying to humidity data for
+ * values in relative humidity.
  *
  */
 
-/* Duration between sensor reads in microseconds. */
-#define SENSOR_READ_INTERVAL (3000000)
-/* Number of sensor read. */
-#define NUM_SENSOR_READ (10)
+#include "clk.h"
+#include "qm_common.h"
+#include "qm_i2c.h"
+#include "qm_identification.h"
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_pinmux.h"
+#include "qm_version.h"
+#include "utils.h"
+#include "hdc1000_bus.h"
+#include "hdc1000_device.h"
+
+#define SENSOR_READ_INTERVAL (3000000) /* 3 seconds. */
+#define NUM_SENSOR_READ (10)	   /* Number of sensor reads. */
 
 /* Get a external reference for I2C instance. */
 extern qm_i2c_t g_i2c_controller_instance;
 
-/* Initialize the I2C controller. */
-static int bus_i2c_init(void);
-
-/* Device verification.by reading device identifiers */
-static int device_verify(void);
-
-/* Sensor initialization. */
-static int sensor_init(hdc1000_measurement_mode_t measure_mode,
-		       hdc1000_resolution_t resolution,
-		       hdc1000_battery_status_t battery,
-		       hdc1000_soft_reset_t reset);
-
-/* Sensor initialization. */
-static int sensor_read(hdc1000_sensor_data_t *sensor_info_ptr,
-		       hdc1000_measurement_mode_t measure_mode, int loop_count);
-
-int main(void)
+static int device_verify(void)
 {
-	hdc1000_sensor_data_t sensor_info;
 	int status;
-	hdc1000_measurement_mode_t measure_mode =
-	    HDC1000_MEASUREMENT_MODE_COMBINED;
 
-	QM_PUTS("Starting: Grove temperature humidity sensor");
-
-	status = bus_i2c_init();
-	if (!status) {
-		status =
-		    sensor_init(measure_mode, HDC1000_RESOLUTION_14BIT,
-				HDC1000_BATTERY_STATUS_LOW_INDICATION_DISABLE,
-				HDC1000_DO_SOFT_RESET);
-		if (!status) {
-			status = sensor_read(&sensor_info, measure_mode,
-					     NUM_SENSOR_READ);
-			if (status) {
-				QM_PRINTF("Error: %s() Sensor read failed %d\n",
-					  __FUNCTION__, status);
-			}
-		} else {
-			QM_PRINTF("Error: %s() Sensor init failed %d\n",
-				  __FUNCTION__, status);
-		}
-	} else {
-		QM_PRINTF("Error: %s() Bus init failed %d\n", __FUNCTION__,
-			  status);
+	status = dev_hdc1000_read_id(HDC1000_ID_MANUFACTURER);
+	if (status) {
+		QM_PRINTF("Error: Manufacturer Id verify failed %d\n", status);
+		return status;
 	}
 
-	QM_PUTS("Finished: Grove temperature humidity sensor");
+	status = dev_hdc1000_read_id(HDC1000_ID_DEVICE);
+	if (status) {
+		QM_PRINTF("Error: Device Id verify failed %d\n", status);
+		return status;
+	}
+
+	status = dev_hdc1000_read_id(HDC1000_ID_SERIAL);
+	if (status) {
+		QM_PRINTF("Error: Device Serial Id verify failed %d\n", status);
+		return status;
+	}
+
 	return status;
 }
 
@@ -176,16 +138,14 @@ static int sensor_init(hdc1000_measurement_mode_t measure_mode,
 
 	status = device_verify();
 	if (status) {
-		QM_PRINTF("Error: %s() Device verify failed %d\n", __FUNCTION__,
-			  status);
+		QM_PRINTF("Error: Device verify failed %d\n", status);
 		return status;
 	}
 
 	status =
 	    dev_hdc1000_configure(measure_mode, resolution, battery, reset);
 	if (status) {
-		QM_PRINTF("Error: %s() Config failed %d\n", __FUNCTION__,
-			  status);
+		QM_PRINTF("Error: Config failed %d\n", status);
 		return status;
 	}
 
@@ -204,8 +164,8 @@ static int sensor_read(hdc1000_sensor_data_t *sensor_info_ptr,
 		status =
 		    dev_hdc1000_get_sensor_data(measure_mode, sensor_info_ptr);
 		if (status) {
-			QM_PRINTF("Error: %s() Getting sensor data failed %d\n",
-				  __FUNCTION__, status);
+			QM_PRINTF("Error: Getting sensor data failed %d\n",
+				  status);
 			break;
 		} else {
 			dev_hdc1000_print_sensor_data(measure_mode,
@@ -217,30 +177,35 @@ static int sensor_read(hdc1000_sensor_data_t *sensor_info_ptr,
 	return status;
 }
 
-static int device_verify(void)
+int main(void)
 {
 	int status;
+	hdc1000_sensor_data_t sensor_info;
+	hdc1000_measurement_mode_t measure_mode =
+	    HDC1000_MEASUREMENT_MODE_COMBINED;
 
-	status = dev_hdc1000_read_id(HDC1000_ID_MANUFACTURER);
-	if (status) {
-		QM_PRINTF("Error: %s() Manufacturer Id verify failed %d\n",
-			  __FUNCTION__, status);
-		return status;
+	QM_PUTS("Starting: Grove temperature/humidity sensor");
+
+	status = bus_i2c_init();
+	if (!status) {
+		status =
+		    sensor_init(measure_mode, HDC1000_RESOLUTION_14BIT,
+				HDC1000_BATTERY_STATUS_LOW_INDICATION_DISABLE,
+				HDC1000_DO_SOFT_RESET);
+		if (!status) {
+			status = sensor_read(&sensor_info, measure_mode,
+					     NUM_SENSOR_READ);
+			if (status) {
+				QM_PRINTF("Error: Sensor read failed %d\n",
+					  status);
+			}
+		} else {
+			QM_PRINTF("Error: Sensor init failed %d\n", status);
+		}
+	} else {
+		QM_PRINTF("Error: Bus init failed %d\n", status);
 	}
 
-	status = dev_hdc1000_read_id(HDC1000_ID_DEVICE);
-	if (status) {
-		QM_PRINTF("Error: %s() Device Id verify failed %d\n",
-			  __FUNCTION__, status);
-		return status;
-	}
-
-	status = dev_hdc1000_read_id(HDC1000_ID_SERIAL);
-	if (status) {
-		QM_PRINTF("Error: %s() Device Serial Id verify failed %d\n",
-			  __FUNCTION__, status);
-		return status;
-	}
-
+	QM_PUTS("Finished: Grove temperature/humidity sensor");
 	return status;
 }

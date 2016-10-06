@@ -36,8 +36,6 @@ PREFIX ?= i586-intel-elfiamcu
 TOOLCHAIN_DIR=$(IAMCU_TOOLCHAIN_DIR)
 endif
 
-LIBNAME=qmsi
-
 ifeq ($(TOOLCHAIN_DIR),)
 $(info Toolchain path is not defined. Please run:)
 ifeq ($(TARGET), sensor)
@@ -76,7 +74,6 @@ END_CMD := ;
 endif
 
 ### Build verbosity level
-
 V ?= 0
 ifeq ($(V), 0)
 else ifeq ($(V), 1)
@@ -114,11 +111,16 @@ $(error BASE_DIR is not defined)
 endif
 
 ### Variables
+ITA_NO_ASSERT ?= 0
 BUILD ?= release
 CFLAGS += -ffunction-sections -fdata-sections
 LDFLAGS += -Xlinker --gc-sections
 ifeq ($(BUILD), debug)
 CFLAGS += -O0 -g -DDEBUG
+ifeq ($(ITA_NO_ASSERT), 1)
+CFLAGS += -DITA_NO_ASSERT
+$(info Asserts will be switched off in debug mode due to code size limitation)
+endif
 else ifeq ($(BUILD), release)
 CFLAGS += -Os -fomit-frame-pointer
 else
@@ -146,6 +148,7 @@ endif
 BIN = bin
 OBJ = obj
 
+LIBNAME=qmsi
 BUILD_DIR = $(BASE_DIR)/build
 LIBQMSI_DIR = $(BUILD_DIR)/$(BUILD)/$(SOC)/$(TARGET)/lib$(LIBNAME)
 LIBQMSI_LIB_DIR = $(LIBQMSI_DIR)/lib
@@ -184,7 +187,8 @@ CFLAGS += -I$(BASE_DIR)/include
 CFLAGS += -fno-asynchronous-unwind-tables
 CFLAGS += -DHAS_RTC_XTAL=$(HAS_RTC_XTAL) -DHAS_HYB_XTAL=$(HAS_HYB_XTAL)
 CFLAGS += -DQM_VER_API_MAJOR=$(QM_VER_API_MAJOR) \
-	-DQM_VER_API_MINOR=$(QM_VER_API_MINOR) -DQM_VER_API_PATCH=$(QM_VER_API_PATCH)
+	  -DQM_VER_API_MINOR=$(QM_VER_API_MINOR) \
+	  -DQM_VER_API_PATCH=$(QM_VER_API_PATCH)
 LDFLAGS += -nostdlib
 
 STDOUT_UART_INIT ?= enable
@@ -202,13 +206,13 @@ else
 LDLIBS += -lc -lnosys -lsoftfp -lgcc
 endif
 
-### If interrupt handling is done externally, like in Zephyr.
-ifeq ($(ISR), handled)
-CFLAGS += -DISR_HANDLED
+ifeq ($(TARGET), x86)
+CFLAGS += -DQM_LAKEMONT
 endif
 
-ifeq ($(RTOS),zephyr)
-CFLAGS += -DZEPHYR_OS
+### If interrupt handling is done externally, like in Zephyr.
+ifeq ($(ENABLE_EXTERNAL_ISR_HANDLING), 1)
+CFLAGS += -DENABLE_EXTERNAL_ISR_HANDLING
 endif
 
 .PHONY: all clean realclean

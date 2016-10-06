@@ -27,85 +27,78 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_soc_regs.h"
-#include "qm_sensor_regs.h"
-#include "qm_interrupt.h"
-#include "qm_ss_interrupt.h"
-#include "qm_common.h"
-#include "qm_uart.h"
-#include "clk.h"
-
-/* QMSI Sensor Subsystem Interrupt APP examples
+/*
+ * QMSI Sensor Subsystem Interrupt app examples.
  *
- * This example includes two APP:
- * 1. SS GPIO interrupt driven APP - interrupt handling is requested with
+ * This example includes two apps:
+ * 1. SS GPIO interrupt driven app - interrupt handling is requested with:
  *
  *    qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, ss_gpio_interrupt_isr);
  *
- *    The APP requires a board to be set up with a jumper cable connecting the
- *    pins listed below so the output pin can trigger an interrupt on the
- *    input pin. PIN_OUT will be configured as an output pin and PIN_INTR will
- *    be configured as an input pin with interrupts enabled.
- *    On the Quark SE development platform, PIN_OUT and PIN_INTR are located on
- *    header J15, PIN 36 and 42 respectively.
+ *    The app requires an Intel(R) Quark(TM) SE development platform to be set
+ *    up with a jumper cable connecting the pins listed below so the output pin
+ *    can trigger an interrupt on the input pin. PIN_OUT will be configured as
+ *    an output pin and PIN_INTR will be configured as an input pin with
+ *    interrupts enabled. PIN_OUT and PIN_INTR are located on header
+ *    J14 pin 14 and 16 respectively.
  *
- * 2. SW driven common interrupt APP - interrupt handling requested same APP
- *    as LMT interrupt handling request:
+ * 2. SW driven common interrupt app - interrupt handling is requested with:
  *
  *    qm_irq_request(QM_IRQ_I2C_1, sw_interrupt_isr);
  *
  */
+
+#include "clk.h"
+#include "qm_common.h"
+#include "qm_interrupt.h"
+#include "qm_sensor_regs.h"
+#include "qm_soc_regs.h"
+#include "qm_ss_interrupt.h"
+#include "qm_uart.h"
+
 #define PIN_OUT (2)
 #define PIN_INTR (3)
 
-#define LED_BIT (25) /* Led on Quark SE development platform. */
+#define LED_BIT (25) /* LED on Quark(TM) SE development platform. */
 
-#define DELAY (300000)
+#define DELAY (300000) /* 0.3 seconds. */
 #define NUM_LOOPS (5)
-
-void ss_gpio_interrupt_example(void);
-void ss_sw_controled_interrupt_example(void);
 
 QM_ISR_DECLARE(sw_interrupt_isr);
 QM_ISR_DECLARE(ss_gpio_interrupt_isr);
 
 volatile int counter = 0;
 
-int main(void)
-{
-	ss_gpio_interrupt_example();
-	counter = 0;
-	ss_sw_controled_interrupt_example();
-	return 0;
-}
-
-void ss_gpio_interrupt_example(void)
+static void ss_gpio_interrupt_example(void)
 {
 	uint32_t i;
-	QM_PRINTF("Starting: SS GPIO interrupt\n");
 
-	/* Enabling clock to interrupt controller */
+	QM_PUTS("Starting: SS GPIO interrupt");
+
+	/* Enable clock to interrupt controller. */
 	__builtin_arc_sr(BIT(31) + BIT(0),
 			 QM_SS_GPIO_0_BASE + QM_SS_GPIO_LS_SYNC);
 
-	/* Setting pin 2 as OUTPUT */
+	/* Set SS GPIO pin 2 as OUTPUT. */
 	__builtin_arc_sr(BIT(2), QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DDR);
 
-	/* Register the SS GPIO interrupt */
+	/* Register the SS GPIO interrupt. */
 	qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, ss_gpio_interrupt_isr);
 
-	/* Set the bit 3 to rising edge-sensitive */
+	/* Set the bit 3 to rising edge-sensitive. */
 	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTTYPE_LEVEL);
-	/* unmask SS GPIO 3 interrupt only */
+	/* Unmask SS GPIO pin 3 interrupt only. */
 	__builtin_arc_sr(~BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
-	/* Clear SS GPIO interrupt requests */
+	/* Clear SS GPIO interrupt requests. */
 	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_PORTA_EOI);
-	/* Enable SS GPIO interrupt */
+	/* Enable SS GPIO interrupt. */
 	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTEN);
 
 	for (i = 0; i < NUM_LOOPS; i++) {
-		/* Toggling the SS GPIO 2, will trigger the interrupt on SS GPIO
-		 * 3 */
+		/*
+		 * Toggle the SS GPIO 2, will trigger the interrupt on SS
+		 * GPIO 3.
+		 */
 		clk_sys_udelay(DELAY);
 		__builtin_arc_sr(BIT(2),
 				 QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DR);
@@ -114,22 +107,22 @@ void ss_gpio_interrupt_example(void)
 		__builtin_arc_sr(0, QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DR);
 		QM_GPIO[0]->gpio_swporta_dr &= ~BIT(LED_BIT);
 	}
-	/* unmask all SS GPIO interrupts */
+	/* Unmask all SS GPIO interrupts. */
 	__builtin_arc_sr(0xff, QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTMASK);
 	if (counter == NUM_LOOPS) {
-		QM_PRINTF("Success\n");
+		QM_PUTS("Success");
 	} else {
-		QM_PRINTF("Error: Check are pins 14 and 16 on P3 connector "
-			  "short connected?\n");
+		QM_PUTS("Error: Check are pins 14 and 16 on J14 connector "
+			"short connected?");
 	}
 
-	QM_PRINTF("Finished: SS GPIO interrupt\n");
+	QM_PUTS("Finished: SS GPIO interrupt");
 }
 
-void ss_sw_controled_interrupt_example(void)
+static void ss_sw_triggered_interrupt_example(void)
 {
 	uint32_t i;
-	QM_PRINTF("Starting: SW controlled interrupt\n");
+	QM_PUTS("Starting: SW triggered interrupt");
 
 	qm_irq_request(QM_IRQ_I2C_1, sw_interrupt_isr);
 
@@ -139,15 +132,15 @@ void ss_sw_controled_interrupt_example(void)
 		clk_sys_udelay(DELAY);
 		QM_GPIO[0]->gpio_swporta_dr &= ~BIT(LED_BIT);
 		clk_sys_udelay(DELAY);
-		/* Set the software controlled interrupt to trigger I2C_1 */
+		/* SW mainpulated interrupt trigger, triggers I2C_1. */
 		__builtin_arc_sr(QM_IRQ_I2C_1_VECTOR, QM_SS_AUX_IRQ_HINT);
 	}
 	if (counter == NUM_LOOPS) {
-		QM_PRINTF("Success\n");
+		QM_PUTS("Success");
 	} else {
-		QM_PRINTF("Error: SW interrupt didn't fire correctly\n");
+		QM_PUTS("Error: SW interrupt didn't fire correctly");
 	}
-	QM_PRINTF("Finished: SW controlled interrupt\n");
+	QM_PUTS("Finished: SW triggered interrupt");
 }
 
 QM_ISR_DECLARE(ss_gpio_interrupt_isr)
@@ -158,8 +151,16 @@ QM_ISR_DECLARE(ss_gpio_interrupt_isr)
 
 QM_ISR_DECLARE(sw_interrupt_isr)
 {
-	/* Disable the sw controlled interrupt trigger */
+	/* Disable the sw triggered interrupt trigger. */
 	__builtin_arc_sr(0, QM_SS_AUX_IRQ_HINT);
-	QM_PRINTF("sw controlled isr call No_%d\n", counter);
+	QM_PRINTF("sw triggered isr call No_%d\n", counter);
 	counter++;
+}
+
+int main(void)
+{
+	ss_gpio_interrupt_example();
+	counter = 0;
+	ss_sw_triggered_interrupt_example();
+	return 0;
 }

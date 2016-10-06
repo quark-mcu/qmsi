@@ -27,20 +27,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_common.h"
-#include <stdlib.h>
-
-#define SIZE 100
 /*
- * Very simple application demonstrating the usage of
- * QM_PUTS/QM_PRINTF/QM_ASSERT and malloc.
- * You can enable/modify these settings via CFLAGS.
+ * CLib Functions
+ *
+ * Very simple app demonstrating the usage of
+ * QM_PUTS, QM_PRINTF, QM_ASSERT,
+ * pico_printf, printf, malloc and free.
  */
+
+#include <stdlib.h>
+#include "qm_common.h"
+
+#define SIZE (100)
 
 int main(void)
 {
-	int *p;
-	int i;
+	int i, *p;
 
 	QM_PUTS("Starting: clib");
 
@@ -48,7 +50,7 @@ int main(void)
 
 	if (NULL == p) {
 		QM_PUTS("Error: malloc unable to allocate memory");
-		return -EIO;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < SIZE; i++) {
@@ -63,10 +65,10 @@ int main(void)
 
 	free(p);
 
-	/* pico_printf only supports %d, %u, %x, %X and %s */
+	/* pico_printf only supports %d, %u, %x, %X and %s. */
 	pico_printf("pico_printf demo: %d\n", 5);
 
-	/* Full printf has a bigger footprint than pico_printf */
+	/* Full printf has a bigger footprint than pico_printf. */
 	printf("printf demo: %.3f\n", 3.14159);
 
 	QM_PUTS("Demonstrating QM_ASSERT functionality: \"Assert 1 == 1\"");

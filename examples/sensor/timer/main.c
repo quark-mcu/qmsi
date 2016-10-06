@@ -27,96 +27,88 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_soc_regs.h"
+/*
+ * Sensor Subsystem (SS) Timer
+ *
+ * This app configures a timer to expire every 0.5 seconds, at which point the
+ * callback function will be invoked to increase the count and a message is
+ * printed to the console.
+ *
+ * This app is specific to the Intel(R) Quark(TM) SE development platform.
+ */
+
 #include "qm_ss_interrupt.h"
-#include "qm_ss_timer.h"
-#include "qm_gpio.h"
-#include "qm_uart.h"
 #include "qm_ss_isr.h"
-#include "qm_pinmux.h"
+#include "qm_ss_timer.h"
 
-#define LED_BIT (25) /* On-board LED on Quark SE development platform. */
-#define PIN_MUX_ID (QM_PIN_ID_59)
-#define PIN_MUX_FN (QM_PMUX_FN_0)
+#define INTERVAL (0x00F42400) /* 0.5 seconds. */
+#define NUM_CALLBACK (5)
 
-#define ONE_SEC_AT_32MHZ (0x02000000)
+static volatile uint32_t cb_count = 0;
+static volatile bool cb_fired = false;
+static volatile bool complete = false;
 
-#define TIMER_FIRED_MAX (5)
-static volatile uint32_t timer_fired = 0;
-
-static void timer0_expired(void *data)
+/* Example timer callback function. */
+static void timer_example_callback(void *data)
 {
-	qm_gpio_state_t pin;
-	timer_fired++;
-	qm_gpio_read_pin(QM_GPIO_0, LED_BIT, &pin);
-
-	if (pin) {
-		qm_gpio_clear_pin(QM_GPIO_0, LED_BIT);
+	/* Reset the timer if necessary. */
+	if (cb_count < NUM_CALLBACK) {
+		cb_count++;
+		cb_fired = true;
+		qm_ss_timer_set(QM_SS_TIMER_0, 0x00000000);
 	} else {
-		qm_gpio_set_pin(QM_GPIO_0, LED_BIT);
+		complete = true;
 	}
-
-	QM_PUTS("Timer fired\n");
-	qm_ss_timer_set(QM_SS_TIMER_0, 0x00000000);
 }
 
-/* This example uses the Sensor Subsystem timer.
- * The timer is set with interrupts enabled.
- *
- * Interrupt is triggered every TWO_SEC_AT_32MHZ.
- *
- * On the Quark SE development platform, this example blinks the on-board LED.
- */
 int main(void)
 {
-	qm_ss_timer_config_t conf;
-	qm_gpio_port_config_t gpio_cfg = {0};
+	qm_ss_timer_config_t cfg;
 
-	QM_PUTS("Starting: Sensor Timer\n");
+	QM_PUTS("Starting: Sensor Timer");
 
-	/* Timer is core internals, it falls in the exception's category,
-	 * not a peripheral's IRQ.  */
+	/*
+	 * Request and unmask the timer interrupt. Timer interrupts and
+	 * exceptions must be registered with the following function.
+	 */
 	qm_ss_int_vector_request(QM_SS_INT_TIMER_0, qm_ss_timer_isr_0);
 	qm_ss_irq_unmask(QM_SS_INT_TIMER_0);
 
-	/* Set the GPIO pin muxing */
-	qm_pmux_select(PIN_MUX_ID, PIN_MUX_FN);
+	/* Configure the timer. */
+	cfg.watchdog_mode = false;
+	cfg.inc_run_only = false;
+	cfg.int_en = true;
+	cfg.count = INTERVAL;
+	cfg.callback = timer_example_callback;
+	cfg.callback_data = NULL;
 
-	/* Request IRQ and write GPIO port config */
-	gpio_cfg.direction = BIT(LED_BIT);
-
-	qm_gpio_set_config(QM_GPIO_0, &gpio_cfg);
-
-	conf.watchdog_mode = false;
-	conf.inc_run_only = false;
-	conf.int_en = true;
-	conf.count = ONE_SEC_AT_32MHZ;
-	conf.callback = timer0_expired;
-	conf.callback_data = NULL;
-
-	if (qm_ss_timer_set_config(QM_SS_TIMER_0, &conf) != 0) {
-		QM_PUTS("Error: Set Config for TIMER0 failed\n");
-		return -1;
+	if (0 != qm_ss_timer_set_config(QM_SS_TIMER_0, &cfg)) {
+		QM_PUTS("Error: Set Config for TIMER0 failed");
+		return 1;
 	}
 
-	if (qm_ss_timer_set(QM_SS_TIMER_0, 0x00000000) != 0) {
-		QM_PUTS("Error: Set Count for TIMER0 failed\n");
-		return -1;
+	/* Set the count. */
+	if (0 != qm_ss_timer_set(QM_SS_TIMER_0, 0x00000000)) {
+		QM_PUTS("Error: Set Count for TIMER0 failed");
+		return 1;
 	}
 
-	while (TIMER_FIRED_MAX > timer_fired) {
+	/* Wait for the app to complete. */
+	while (false == complete) {
+		if (cb_fired) {
+			cb_fired = false;
+			QM_PUTS("Timer fired!");
+		}
 	}
 
-	/*
-	 * Disable the interrupts, we can never stop the timer once it is has
-	 * started running.
-	 */
-	conf.int_en = false;
-	if (qm_ss_timer_set_config(QM_SS_TIMER_0, &conf) != 0) {
-		QM_PUTS("Error: Set Config for TIMER0 failed\n");
-		return -1;
+	/* Disable the interrupt, the timer will continue to run. */
+	cfg.int_en = false;
+	if (0 != qm_ss_timer_set_config(QM_SS_TIMER_0, &cfg)) {
+		QM_PUTS("Error: Set Config for TIMER0 failed");
+		return 1;
 	}
 
-	QM_PUTS("Finished: Sensor Timer\n");
+	QM_PUTS("Finished: Sensor Timer");
+
 	return 0;
 }

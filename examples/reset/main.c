@@ -27,34 +27,37 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
+/*
+ * Reset
+ *
+ * This app demonstrates the usage of qm_soc_reset().
+ *
+ * This app uses the gps3 general purpose sticky register. Power on reset (POR)
+ * value is 0. The value of this register is cleared on POR or COLD reset. The
+ * value is preserved across a WARM reset.
+ */
+
 #include "qm_common.h"
 #include "qm_init.h"
 
-/*
- * Very simple application demonstrating the usage of
- * qm_soc_reset
- */
-
 int main(void)
 {
-	/*
-	 * gps3 - is a general purpose sticky register. Power on reset (POR)
-	 * value is 0. The value of this register is cleared on POR or COLD
-	 * reset. The value is preserved across a WARM reset.
-	 */
 	QM_SCSS_GP->gps3++;
+
 	switch (QM_SCSS_GP->gps3) {
 	case 1:
-		QM_PRINTF("Starting: Reset\n");
-		QM_PUTS("Last reset type: Power on reset or COLD reset.\n");
+		QM_PUTS("Starting: Reset");
+
+		QM_PUTS("Last reset type: Power on reset or COLD reset.");
+
 		qm_soc_reset(QM_WARM_RESET);
-		break;
+
 	case 2:
-		QM_PUTS("Last reset type: Warm reset.\n");
+		QM_PUTS("Last reset type: Warm reset.");
 		/*
-		 * Cold reset clears the sticky registers, so can not
-		 * track how the reset was issued.
+		 * Cold reset clears the sticky registers, so can not track if
+		 * the reset was a cold reset or a power-on reset. Uncomment
+		 * the following line to demonstrate a cold reset.
 		 */
 		/*qm_soc_reset(QM_COLD_RESET);*/
 
@@ -62,11 +65,13 @@ int main(void)
 		 * registers are sticky, reset it to 0. */
 		QM_SCSS_GP->gps3 = 0;
 		break;
+
 	default:
 		QM_ASSERT(0);
 		break;
 	}
 
-	QM_PRINTF("Finished: Reset\n");
+	QM_PUTS("Finished: Reset");
+
 	return 0;
 }

@@ -37,6 +37,29 @@ GENERATED_DIRS += $(SOC_DIR)/$(BUILD)
 
 CFLAGS += -I$(SOC_DIR)/include
 
+DRV_SOURCES =
+DRV_SOURCES += adc/qm_adc.c
+DRV_SOURCES += aon_counters/qm_aon_counters.c
+DRV_SOURCES += comparator/qm_comparator.c
+DRV_SOURCES += dma/qm_dma.c
+DRV_SOURCES += flash/qm_flash.c
+DRV_SOURCES += fpr/qm_fpr.c
+DRV_SOURCES += gpio/qm_gpio.c
+DRV_SOURCES += i2c/qm_i2c.c
+DRV_SOURCES += qm_identification.c
+DRV_SOURCES += qm_init.c
+DRV_SOURCES += interrupt/qm_interrupt.c
+DRV_SOURCES += mpr/qm_mpr.c
+DRV_SOURCES += timer/qm_pic_timer.c
+DRV_SOURCES += pinmux/qm_pinmux.c
+DRV_SOURCES += pwm/qm_pwm.c
+DRV_SOURCES += rtc/qm_rtc.c
+DRV_SOURCES += spi/qm_spi.c
+DRV_SOURCES += uart/qm_uart.c
+DRV_SOURCES += qm_version.c
+DRV_SOURCES += wdt/qm_wdt.c
+DRV_SOURCES += soc_watch.c
+
 $(SOC_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(SOC_DIR)/drivers/%.c
 	$(call mkdir, $(SOC_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
 	$(CC) $(CFLAGS) -c -o $@ $<

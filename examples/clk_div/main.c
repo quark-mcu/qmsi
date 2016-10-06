@@ -27,11 +27,19 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Clock Divisor
+ *
+ * This app demonstrates changing the system clock speed.
+ */
+
 #include "clk.h"
 #include "qm_uart.h"
 
-/* Helper macros to change oscillator settings and print out a string over UART
- * at 115200bps. */
+/*
+ * Helper macros to change oscillator settings and print out a string over UART
+ * at 115200bps.
+ */
 
 #define SYSCLK_32MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 17, 6))
 #define SYSCLK_16MHZ_TO_UART_115200BPS (QM_UART_CFG_BAUD_DL_PACK(0, 8, 11))
@@ -59,7 +67,6 @@
 		QM_PUTS("\tsource: XTAL osc (32MHz), divisor: " #sysclk_div);  \
 	} while (0);
 
-/* QMSI clock divisor app example */
 int main(void)
 {
 	QM_PUTS("Starting: QMSI clock divisor example");

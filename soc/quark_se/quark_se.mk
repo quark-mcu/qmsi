@@ -30,8 +30,16 @@
 ### Variables
 SOC = quark_se
 SOC_DIR = $(BASE_DIR)/soc/$(SOC)
-LINKER_FILE ?= $(SOC_DIR)/$(SOC).ld
+LINKER_FILE ?= $(SOC_DIR)/$(TARGET).ld
 
 ### Flags
+ifeq ($(TARGET), x86)
 CFLAGS += -march=lakemont -mtune=lakemont -miamcu -msoft-float
+endif
+
+ifeq ($(TARGET), sensor)
+### FIXME: Replace with –mcpu=quarkse_em when the ARC toolchain bug is fixed.
+CFLAGS += -mcpu=arcem -mdiv-rem -mbarrel-shifter -mspfp -mdpfp
+endif
+
 CFLAGS += -I$(SOC_DIR)/include

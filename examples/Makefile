@@ -37,10 +37,12 @@ TARGET ?= $(DEFAULT_TARGET)
 BUILD ?= release
 
 SUBDIRS := $(filter %/, $(wildcard ./*/))
+SUBDIRS := $(filter-out ./include/, ${SUBDIRS})
 
 ifeq ($(SOC), quark_se)
 SUBDIRS := $(subst ./adc/,,${SUBDIRS})
 SUBDIRS := $(subst ./adc_continuous/,,${SUBDIRS})
+SUBDIRS := $(subst ./magneto/,,${SUBDIRS})
 SUBDIRS := $(subst ./quark_d2000/,,${SUBDIRS})
 ifeq ($(TARGET), x86)
 #### Excluding the non supported modules
@@ -53,6 +55,7 @@ SUBDIRS := $(subst ./pic_timer/,,${SUBDIRS})
 SUBDIRS := $(subst ./crypto/,,${SUBDIRS})
 SUBDIRS := $(subst ./quark_se/,,${SUBDIRS})
 SUBDIRS := $(subst ./power_profiler/,,${SUBDIRS})
+SUBDIRS := $(subst ./irq_lock/,,${SUBDIRS})
 endif
 else ifeq ($(SOC), quark_d2000)
 #### Excluding the non supported modules

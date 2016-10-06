@@ -30,7 +30,7 @@
 ### Variables
 SOC = quark_d2000
 SOC_DIR = $(BASE_DIR)/soc/$(SOC)
-LINKER_FILE ?= $(SOC_DIR)/$(SOC).ld
+LINKER_FILE ?= $(SOC_DIR)/$(TARGET).ld
 
 ### Flags
 CFLAGS += -march=lakemont -mtune=lakemont -miamcu -msoft-float

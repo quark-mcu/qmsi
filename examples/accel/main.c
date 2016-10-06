@@ -29,7 +29,7 @@
  */
 
 /*
- * QMSI Accelerometer app example.
+ * Accelerometer
  *
  * This app will read the accelerometer data from the onboard BMC150/160 sensor
  * and print it to the console every 125 milliseconds. The app will complete
@@ -51,7 +51,7 @@
 #include "qm_uart.h"
 #include "bmx1xx/bmx1xx.h"
 
-#define INTERVAL (QM_RTC_ALARM_SECOND >> 3) /* 125 milliseconds. */
+#define INTERVAL (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_8)) /* 125 milliseconds. */
 #define NUM_SAMPLES (500)
 #if (__IPP_ENABLED__)
 /* Number of samples to use to generate the statistics from. */
@@ -60,15 +60,19 @@
 
 static volatile uint32_t cb_count = 0;
 static volatile bool complete = false;
+static volatile bool read_accel = false;
+static volatile bool print_axis = false;
+static volatile bool read_error = false;
+static uint32_t accel_x, accel_y, accel_z;
 
 #if (__IPP_ENABLED__)
+static float32_t mean, var, rms;
 static float32_t samples[SAMPLES_SIZE];
 
 static void print_axis_stats(int16_t value)
 {
 	static uint32_t index = 0;
 	static uint32_t count = 0;
-	float32_t mean, var, rms;
 
 	/* Overwrite the oldest sample in the array. */
 	samples[index] = value;
@@ -82,8 +86,6 @@ static void print_axis_stats(int16_t value)
 	ippsq_rms_f32(samples, count, &rms);
 	ippsq_var_f32(samples, count, &var);
 	ippsq_mean_f32(samples, count, &mean);
-
-	QM_PRINTF("rms %d var %d mean %d\n", (int)rms, (int)var, (int)mean);
 }
 #endif /* __IPP_ENABLE__ */
 
@@ -93,13 +95,16 @@ static void accel_callback(void *data)
 	bmx1xx_accel_t accel = {0};
 
 	if (0 == bmx1xx_read_accel(&accel)) {
-		QM_PRINTF("x %d y %d z %d\n", accel.x, accel.y, accel.z);
+		read_accel = true;
+		accel_x = accel.x;
+		accel_y = accel.y;
+		accel_z = accel.z;
 	} else {
-		QM_PUTS("Error: unable to read from sensor");
+		read_error = true;
 	}
-
 #if (__IPP_ENABLED__)
 	print_axis_stats(accel.z);
+	print_axis = true;
 #endif /* __IPP_ENABLE__ */
 
 	/* Reset the RTC alarm to fire again if necessary. */
@@ -125,6 +130,7 @@ int main(void)
 	rtc.alarm_val = INTERVAL;
 	rtc.callback = accel_callback;
 	rtc.callback_data = NULL;
+	rtc.prescaler = CLK_RTC_DIV_1;
 
 	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
 
@@ -149,8 +155,23 @@ int main(void)
 	qm_rtc_set_config(QM_RTC_0, &rtc);
 
 	/* Wait for the correct number of samples to be read. */
-	while (!complete)
-		;
+	while (!complete) {
+
+		if (read_accel) {
+			QM_PRINTF("x %d y %d z %d\n", accel_x, accel_y,
+				  accel_z);
+			read_accel = false;
+		} else if (read_error) {
+			QM_PUTS("Error: unable to read from sensor");
+		}
+#if (__IPP_ENABLED__)
+		if (print_axis) {
+			QM_PRINTF("rms %d var %d mean %d\n", (int)rms, (int)var,
+				  (int)mean);
+			print_axis = false;
+		}
+#endif
+	}
 
 	QM_PUTS("Finished: Accelerometer example app");
 
