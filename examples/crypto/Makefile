@@ -37,7 +37,7 @@ BASE_DIR := ../..
 APP_DIR := .
 
 ifeq ($(TARGET), sensor)
-$(error Supported TARGET values are 'x86')
+$(error Supported TARGET value is 'x86')
 endif
 
 ### Make includes
@@ -45,7 +45,7 @@ include $(BASE_DIR)/base.mk
 
 ### Tinycript sources are not C90 compilant
 ifneq ($(CSTD),c99)
-$(error Supported CSTD values are 'c99')
+$(error Supported CSTD value is 'c99')
 endif
 
 ifeq ($(TINYCRYPT_SRC_DIR),)

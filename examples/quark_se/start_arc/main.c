@@ -28,36 +28,13 @@
  */
 
 #include "qm_soc_regs.h"
+#include "ss_init.h"
 
 /*
  * Start the ARC running.
- * If a user has decided to create a bootloader with START_ARC=0, thereby
- * ensuring that an x86 application is responsible for starting ARC execution.
- * The following example provides the steps required by the x86 application.
+ *
+ * This example exemplifies how x86 applications may start ARC execution.
  */
-
-#define SS_APP_PTR_ADDR (0x40000000)
-
-extern uint32_t __sensor_reset_vector[];
-static __inline__ void sensor_activation(void)
-{
-	/*
-	 * Write the ARC reset vector.
-	 *
-	 * The ARC reset vector is in SRAM. The first 4 bytes of the Sensor
-	 * Subsystem Flash partition point to the application entry point
-	 * (pointer located at SS_APP_PTR_ADDR).
-	 * Write the pointer to the application entry point into the reset
-	 * vector.
-	 */
-	volatile uint32_t *ss_reset_vector = __sensor_reset_vector;
-	volatile uint32_t *sensor_startup = (uint32_t *)SS_APP_PTR_ADDR;
-
-	*ss_reset_vector = *sensor_startup;
-
-	/* Request ARC Run. */
-	QM_SCSS_SS->ss_cfg |= QM_SS_CFG_ARC_RUN_REQ_A;
-}
 
 int main(void)
 {

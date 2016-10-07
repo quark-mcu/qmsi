@@ -27,53 +27,68 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_pic_timer.h"
+/*
+ * Programmable Interrupt Controller (PIC) Timer
+ *
+ * This app sets up a PIC timer to fire every 0.125 seconds which results in the
+ * callback function being invoked. The app disables the timer once there has
+ * been 5 callbacks.
+ */
+
 #include "qm_interrupt.h"
 #include "qm_isr.h"
+#include "qm_pic_timer.h"
 
-#include <stdio.h>
+#define NUM_CALLBACKS (5)
 
-static volatile unsigned int ticks;
-#define NUM_TICKS (5)
+static volatile unsigned int cb_count;
 
-static void timer_expired(void *data)
+/* Example timer callback. */
+static void example_timer_callback(void *data)
 {
-	QM_PRINTF("%u\n", ticks);
-
-	ticks++;
+	++cb_count;
 }
-
-qm_pic_timer_config_t conf;
 
 int main(void)
 {
-	ticks = 0;
+	qm_pic_timer_config_t cfg;
+	cb_count = 0;
+	uint32_t timer_count;
 
-	conf.mode = QM_PIC_TIMER_MODE_PERIODIC;
-	conf.int_en = true;
-	conf.callback = timer_expired;
+	QM_PUTS("Starting: PIC Timer");
 
-	QM_PRINTF("Starting: PIC Timer\n");
-#if (HAS_APIC)
+	/* Configure the PIC timer. */
+	cfg.mode = QM_PIC_TIMER_MODE_PERIODIC;
+	cfg.int_en = true;
+	cfg.callback = example_timer_callback;
+
+#if (HAS_APIC) /* Request the interrupt. */
 	qm_int_vector_request(QM_INT_VECTOR_PIC_TIMER, qm_pic_timer_isr);
 #elif(HAS_MVIC)
 	qm_irq_request(QM_IRQ_PIC_TIMER, qm_pic_timer_isr);
-#else
-#error "Unsupported processor/architecture"
-#endif
+#endif /* HAS_APIC */
 
-	qm_pic_timer_set_config(&conf);
+	/* Write the config and start the timer. */
+	qm_pic_timer_set_config(&cfg);
+	qm_pic_timer_set(0x3D0900); /* 0.125 seconds. */
 
-	/* Set period.  The following value generates one interrupt per second
-	 * with a 32MHz sysclk.
-	 */
-	qm_pic_timer_set(0x2000000);
+	/* Wait for the correct number of callbacks to be invoked. */
+	while (cb_count < NUM_CALLBACKS)
+		;
 
-	while (ticks < NUM_TICKS) {
+	QM_PRINTF("Number of interrupts: %u\n", cb_count);
+
+	/* Get the current value of the PIC timer and print it. */
+	if (qm_pic_timer_get(&timer_count) == 0) {
+		QM_PRINTF("Current PIC timer value: %u\n", timer_count);
+	} else {
+		QM_PUTS("Error: Could not read PIC timer value");
 	}
 
+	/* Stop the timer. */
 	qm_pic_timer_set(0);
-	QM_PRINTF("Finished: PIC Timer\n");
+
+	QM_PUTS("Finished: PIC Timer");
 
 	return 0;
 }

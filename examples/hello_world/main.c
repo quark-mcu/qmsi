@@ -27,12 +27,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Hello World
+ *
+ * This app prints a "hello, world" message to the screen.
+ */
+
 #include "qm_common.h"
 
-/* Hello world example app */
 int main(void)
 {
-	QM_PRINTF("hello, world\n");
+	QM_PUTS("hello, world");
 
 	return 0;
 }

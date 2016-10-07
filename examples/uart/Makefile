@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-### Hello world example makefile
+### UART  example makefile
 
 ### Variables
 APP_NAME = uart

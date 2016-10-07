@@ -27,25 +27,32 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "vreg.h"
-#include "qm_common.h"
-
-/* Voltage Regulator app example
+/*
+ * Voltage Regulator app example.
  *
  * This example demonstrates voltage regulator states.
  */
+
+#include "qm_common.h"
+#include "vreg.h"
+
 int main(void)
 {
-	QM_PUTS("Starting: VREG example");
+	QM_PUTS("Starting: VREG");
 
 	QM_PUTS("Put PLAT1P8 in LINEAR mode.");
+
 	vreg_plat1p8_set_mode(VREG_MODE_LINEAR);
+
 	QM_PUTS("Put PLAT1P8 in SHUTDOWN mode.");
+
 	vreg_plat1p8_set_mode(VREG_MODE_SHUTDOWN);
+
 	QM_PUTS("Put PLAT1P8 in SWITCHING mode.");
+
 	vreg_plat1p8_set_mode(VREG_MODE_SWITCHING);
 
-	QM_PUTS("Finished: VREG example");
+	QM_PUTS("Finished: VREG");
 
 	return 0;
 }

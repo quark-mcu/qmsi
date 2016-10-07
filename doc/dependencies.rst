@@ -12,8 +12,7 @@ Toolchain
 *********
 
   ISSM (Intel System Studio Microcontrollers) Toolchain is used for building
-  QMSI. Currently supported version is "2016-05-12". These two compilers are
-  essential:
+  QMSI. These two compilers are essential:
 
   * i586-intel-elfiamcu 5.2.1
   * arc-elf32 4.8.5

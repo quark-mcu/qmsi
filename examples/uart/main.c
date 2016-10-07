@@ -27,22 +27,28 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_pinmux.h"
-#include "qm_uart.h"
+/*
+ * Universal Asynchronous Receiver/Transmitter (UART)
+ *
+ * This app demonstrates the UART functionality on Intel(R) Quark(TM)
+ * development platforms.
+ */
+
+#include "clk.h"
 #include "qm_interrupt.h"
 #include "qm_isr.h"
-#include "clk.h"
+#include "qm_pinmux.h"
+#include "qm_uart.h"
 
-#define BANNER_STR ("Hello, world!  QMSI echo application, Pol'd message.\n")
+#define BANNER_STR ("\nQMSI echo application, Pol'd message.\n")
 
 #define BANNER_IRQ_ID (1)
-#define BANNER_IRQ                                                             \
-	("\n\nHello, world!  QMSI echo application, IRQ'd message.\n")
-#define BANNER_IRQ_COMPLETE ("IRQ Transfer completed.\n")
+#define BANNER_IRQ ("\nQMSI echo application, IRQ'd message.\n")
+#define BANNER_IRQ_COMPLETE ("IRQ Transfer completed.\n\n")
 
 #define BANNER_DMA_ID (2)
-#define BANNER_DMA ("\n\nHello, world!  QMSI echo application, DMA message.\n")
-#define BANNER_DMA_COMPLETE ("DMA Transfer completed.\n")
+#define BANNER_DMA ("\n\nQMSI echo application, DMA message.\n")
+#define BANNER_DMA_COMPLETE ("DMA Transfer completed.\n\n")
 
 #define RX_STR ("Data received: ")
 #define ERR_STR ("Error: Transmission incomplete.\n")
@@ -54,41 +60,73 @@
 #define WAIT_1SEC (1000000)
 #define WAIT_5SEC (5000000)
 
-static void wait_rx_callback_timeout(uint32_t timeout);
-static void uart_example_tx_callback(void *data, int error,
-				     qm_uart_status_t status, uint32_t len);
-static void uart_example_rx_callback(void *data, int error,
-				     qm_uart_status_t status, uint32_t len);
+#define DATA_LEN (50)
 
-#define BIG_NUMBER_RX (50)
-static uint8_t rx_buffer[BIG_NUMBER_RX];
-static volatile bool rx_callback_invoked = false;
+/* Get UART name from STDOUT_UART as a string. */
+#define STR_VALUE(arg) #arg
+#define ARG_NAME(name) STR_VALUE(name)
+#define UART_NAME ARG_NAME(STDOUT_UART)
 
-/* Request data for UART asynchronous operation (transfer descriptor) needs to
+static uint8_t rx_buffer[DATA_LEN];
+static volatile bool rx_callback_invoked = false, tx_callback_invoked = false;
+static qm_uart_status_t uart_status __attribute__((unused)) = 0;
+static uint32_t write_len = 0;
+
+/*
+ * Request data for UART asynchronous operation (transfer descriptor) needs to
  * be kept alive during request processing. It is safer when it is globally
  * accessible within the file - we are sure then that they will be always in the
- * scope when IRQ will be triggered*/
+ * scope when IRQ will be triggered.
+ */
 static qm_uart_transfer_t async_xfer_desc = {0};
 
-/* Sample UART0 QMSI application. */
-int main(void)
+static void wait_rx_callback_timeout(uint32_t timeout)
 {
-	qm_uart_config_t cfg = {0};
-	qm_uart_status_t uart_status __attribute__((unused)) = 0;
-	int ret __attribute__((unused));
-	const uint32_t xfer_irq_data = BANNER_IRQ_ID;
-	const uint32_t xfer_dma_data = BANNER_DMA_ID;
+	while (!rx_callback_invoked && timeout) {
+		clk_sys_udelay(WAIT_READ_CB_PERIOD_1MS);
+		--timeout;
+	};
+}
 
-	/* Set divisors to yield 115200bps baud rate. */
-	/* Sysclk is set by boot ROM to hybrid osc in crystal mode (32MHz),
-	 * peripheral clock divisor set to 1.
-	 */
-	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 17, 6);
+static void uart_example_tx_callback(void *data, int error,
+				     qm_uart_status_t status, uint32_t len)
+{
+	uint32_t id = *(uint32_t *)data;
+	write_len = len;
 
-	cfg.line_control = QM_UART_LC_8N1;
-	cfg.hw_fc = false;
+	switch (id) {
+	case BANNER_IRQ_ID:
+	case BANNER_DMA_ID:
+		tx_callback_invoked = true;
+		break;
 
-/* Mux out STDOUT_UART tx/rx pins and enable input for rx. */
+	default:
+		break;
+	}
+}
+
+static void uart_example_rx_callback(void *data, int error,
+				     qm_uart_status_t status, uint32_t len)
+{
+	uint32_t id = *(uint32_t *)data;
+
+	write_len = len;
+	if (!error || error == -ECANCELED) {
+		/* Transfer successful or RX terminated. */
+		switch (id) {
+		case BANNER_IRQ_ID:
+		case BANNER_DMA_ID:
+			rx_callback_invoked = true;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+static void pin_mux_setup()
+{
+/* Mux out STDOUT_UART TX/RX pins and enable input for RX. */
 #if (QUARK_SE)
 	if (STDOUT_UART == QM_UART_0) {
 		qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
@@ -114,16 +152,188 @@ int main(void)
 #else
 #error("Unsupported / unspecified processor detected.")
 #endif
+}
+
+static int irq_tx()
+{
+	/* IRQ based TX. */
+	async_xfer_desc.data = (uint8_t *)BANNER_IRQ;
+	async_xfer_desc.data_len = sizeof(BANNER_IRQ);
+	async_xfer_desc.callback = uart_example_tx_callback;
+	if (qm_uart_irq_write(STDOUT_UART, &async_xfer_desc)) {
+		QM_PUTS("IRQ write failed");
+		return 1;
+	}
+	while (!tx_callback_invoked)
+		;
+	qm_uart_write_buffer(STDOUT_UART, (uint8_t *)BANNER_IRQ_COMPLETE,
+			     sizeof(BANNER_IRQ_COMPLETE));
+	tx_callback_invoked = false;
+	return 0;
+}
+
+static int irq_rx()
+{
+	/* IRQ based RX. */
+	rx_callback_invoked = false;
+	write_len = 0;
+
+	async_xfer_desc.data = rx_buffer;
+	async_xfer_desc.data_len = DATA_LEN;
+	async_xfer_desc.callback = uart_example_rx_callback;
+	if (qm_uart_irq_read(STDOUT_UART, &async_xfer_desc)) {
+		QM_PUTS("IRQ read failed");
+		return 1;
+	}
+
+	QM_PRINTF("Waiting for data on %s (IRQ mode). Type %d "
+		  "characters...\n",
+		  UART_NAME, DATA_LEN);
+
+	wait_rx_callback_timeout(TIMEOUT_10SEC);
+
+	if (!rx_callback_invoked) {
+		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)ERR_STR,
+				     sizeof(ERR_STR));
+		/*
+		 * RX complete callback was not invoked, we need to terminate
+		 * the transfer in order to grab whatever is available in the RX
+		 * buffer.
+		 */
+		if (qm_uart_irq_read_terminate(STDOUT_UART)) {
+			QM_PUTS("IRQ transfer termination failed");
+			return 1;
+		}
+	} else {
+		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)RX_STR,
+				     sizeof(RX_STR));
+		qm_uart_write_buffer(STDOUT_UART, rx_buffer, write_len);
+		/*
+		 * RX complete callback was invoked and RX buffer was read, we
+		 * wait in case the user does not stop typing after entering the
+		 * exact amount of data that fits the RX buffer, i.e. there may
+		 * be additional bytes in the RX FIFO that need to be read
+		 * before continuing.
+		 */
+		clk_sys_udelay(WAIT_5SEC);
+
+		qm_uart_get_status(STDOUT_UART, &uart_status);
+		if (QM_UART_RX_BUSY & uart_status) {
+			/* Fetch data in RX FIFO. */
+			if (qm_uart_irq_read(STDOUT_UART, &async_xfer_desc)) {
+				QM_PUTS("IRQ read failed");
+				return 1;
+			}
+
+			if (qm_uart_irq_read_terminate(STDOUT_UART)) {
+				QM_PUTS("IRQ transfer termination failed");
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+static int dma_rx()
+{
+	/* DMA based RX. */
+	rx_callback_invoked = false;
+	write_len = 0;
+
+	if (qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
+				       QM_DMA_PERIPHERAL_TO_MEMORY)) {
+		QM_PUTS("DMA channel config failed");
+		return 1;
+	}
+
+	QM_PRINTF("Waiting for data on %s (DMA mode). Type %d "
+		  "characters...\n",
+		  UART_NAME, DATA_LEN);
+
+	async_xfer_desc.data = (uint8_t *)rx_buffer;
+	async_xfer_desc.data_len = DATA_LEN;
+	async_xfer_desc.callback = uart_example_rx_callback;
+	if (qm_uart_dma_read(STDOUT_UART, &async_xfer_desc)) {
+		QM_PUTS("DMA read failed.");
+		return 1;
+	}
+
+	wait_rx_callback_timeout(TIMEOUT_10SEC);
+
+	if (!rx_callback_invoked) {
+		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)ERR_STR,
+				     sizeof(ERR_STR));
+		/*
+		 * RX complete callback was not invoked, we need to terminate
+		 * the transfer in order to grab whatever was written in the RX
+		 * buffer.
+		 */
+		if (qm_uart_dma_read_terminate(STDOUT_UART)) {
+			QM_PUTS("DMA transfer termination failed");
+			return 1;
+		}
+	} else {
+
+		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)RX_STR,
+				     sizeof(RX_STR));
+		qm_uart_write_buffer(STDOUT_UART, rx_buffer, write_len);
+	}
+	return 0;
+}
+
+static int dma_tx()
+{
+	/* DMA based TX. */
+	if (qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
+				       QM_DMA_MEMORY_TO_PERIPHERAL)) {
+		QM_PUTS("DMA channel config failed");
+		return 1;
+	}
+
+	async_xfer_desc.data = (uint8_t *)BANNER_DMA;
+	async_xfer_desc.data_len = sizeof(BANNER_DMA);
+	async_xfer_desc.callback = uart_example_tx_callback;
+	if (qm_uart_dma_write(STDOUT_UART, &async_xfer_desc)) {
+		QM_PUTS("DMA write failed");
+		return 1;
+	}
+	while (!tx_callback_invoked)
+		;
+
+	qm_uart_write_buffer(STDOUT_UART, (uint8_t *)BANNER_DMA_COMPLETE,
+			     sizeof(BANNER_DMA_COMPLETE));
+	tx_callback_invoked = false;
+	return 0;
+}
+
+int main(void)
+{
+	qm_uart_config_t cfg = {0};
+	const uint32_t xfer_irq_data = BANNER_IRQ_ID;
+	const uint32_t xfer_dma_data = BANNER_DMA_ID;
+
+	/*
+	 * Set divisors to yield 115200bps baud rate. Sysclk is set by boot ROM
+	 * to hybrid osc in crystal mode (32MHz), peripheral clock divisor set
+	 * to 1.
+	 */
+	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 17, 6);
+	cfg.line_control = QM_UART_LC_8N1;
+	cfg.hw_fc = false;
+
+	pin_mux_setup();
 
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_UARTA_REGISTER);
 	qm_uart_set_config(STDOUT_UART, &cfg);
 
-	QM_PRINTF("Starting: UART\n");
+	QM_PUTS("Starting: UART");
 
 	/* Synchronous TX. */
-	ret = qm_uart_write_buffer(STDOUT_UART, (uint8_t *)BANNER_STR,
-				   sizeof(BANNER_STR));
-	QM_ASSERT(0 == ret);
+	if (qm_uart_write_buffer(STDOUT_UART, (uint8_t *)BANNER_STR,
+				 sizeof(BANNER_STR))) {
+		QM_PUTS("UART buffer write failed.");
+		return 1;
+	}
 
 /* Register the UART interrupts. */
 #if (STDOUT_UART_0)
@@ -136,50 +346,14 @@ int main(void)
 	async_xfer_desc.callback_data = (void *)&xfer_irq_data;
 
 	/* IRQ based TX. */
-	async_xfer_desc.data = (uint8_t *)BANNER_IRQ;
-	async_xfer_desc.data_len = sizeof(BANNER_IRQ);
-	async_xfer_desc.callback = uart_example_tx_callback;
-	ret = qm_uart_irq_write(STDOUT_UART, &async_xfer_desc);
-	QM_ASSERT(0 == ret);
-
+	if (irq_tx()) {
+		return 1;
+	}
 	clk_sys_udelay(WAIT_1SEC);
 
 	/* IRQ based RX. */
-	rx_callback_invoked = false;
-
-	async_xfer_desc.data = rx_buffer;
-	async_xfer_desc.data_len = BIG_NUMBER_RX;
-	async_xfer_desc.callback = uart_example_rx_callback;
-	ret = qm_uart_irq_read(STDOUT_UART, &async_xfer_desc);
-	QM_ASSERT(0 == ret);
-	QM_PRINTF("\nWaiting for you to type %d characters... ?\n",
-		  BIG_NUMBER_RX);
-
-	wait_rx_callback_timeout(TIMEOUT_10SEC);
-
-	if (!rx_callback_invoked) {
-		/* RX complete callback was not invoked, we need to terminate
-		 * the transfer in order to grab whatever is available in the RX
-		 * buffer. */
-		ret = qm_uart_irq_read_terminate(STDOUT_UART);
-		QM_ASSERT(0 == ret);
-	} else {
-		/* RX complete callback was invoked and RX buffer was read, we
-		 * wait in case the user does not stop typing after entering the
-		 * exact amount of data that fits the RX buffer, i.e. there may
-		 * be additional bytes in the RX FIFO that need to be read
-		 * before continuing. */
-		clk_sys_udelay(WAIT_5SEC);
-
-		qm_uart_get_status(STDOUT_UART, &uart_status);
-		if (QM_UART_RX_BUSY & uart_status) {
-			/* There is some data in the RX FIFO, let's fetch it. */
-			ret = qm_uart_irq_read(STDOUT_UART, &async_xfer_desc);
-			QM_ASSERT(0 == ret);
-
-			ret = qm_uart_irq_read_terminate(STDOUT_UART);
-			QM_ASSERT(0 == ret);
-		}
+	if (irq_rx()) {
+		return 1;
 	}
 
 	/* Register the DMA interrupts. */
@@ -187,109 +361,25 @@ int main(void)
 	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
 
 	/* DMA controller initialization. */
-	ret = qm_dma_init(QM_DMA_0);
-	QM_ASSERT(0 == ret);
+	if (qm_dma_init(QM_DMA_0)) {
+		QM_PUTS("DMA init failed");
+		return 1;
+	}
 
 	/* Used on both TX and RX. */
 	async_xfer_desc.callback_data = (void *)&xfer_dma_data;
 
 	/* DMA based TX. */
-	ret =
-	    qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
-				       QM_DMA_MEMORY_TO_PERIPHERAL);
-	QM_ASSERT(0 == ret);
-
-	async_xfer_desc.data = (uint8_t *)BANNER_DMA;
-	async_xfer_desc.data_len = sizeof(BANNER_DMA);
-	async_xfer_desc.callback = uart_example_tx_callback;
-	ret = qm_uart_dma_write(STDOUT_UART, &async_xfer_desc);
-	QM_ASSERT(0 == ret);
-
+	if (dma_tx()) {
+		return 1;
+	}
 	clk_sys_udelay(WAIT_1SEC);
 
 	/* DMA based RX. */
-	rx_callback_invoked = false;
-
-	ret =
-	    qm_uart_dma_channel_config(STDOUT_UART, QM_DMA_0, QM_DMA_CHANNEL_0,
-				       QM_DMA_PERIPHERAL_TO_MEMORY);
-	QM_ASSERT(0 == ret);
-
-	QM_PUTS("Waiting for data on STDOUT_UART (DMA mode) ...");
-	async_xfer_desc.data = (uint8_t *)rx_buffer;
-	async_xfer_desc.data_len = BIG_NUMBER_RX;
-	async_xfer_desc.callback = uart_example_rx_callback;
-	ret = qm_uart_dma_read(STDOUT_UART, &async_xfer_desc);
-	QM_ASSERT(0 == ret);
-
-	wait_rx_callback_timeout(TIMEOUT_10SEC);
-
-	if (!rx_callback_invoked) {
-		/* RX complete callback was not invoked, we need to terminate
-		 * the transfer in order to grab whatever was written in the RX
-		 * buffer. */
-		ret = qm_uart_dma_read_terminate(STDOUT_UART);
-		QM_ASSERT(0 == ret);
+	if (dma_rx()) {
+		return 1;
 	}
+	QM_PUTS("\n\nFinished: UART");
 
-	QM_PRINTF("\nFinished: UART\n");
 	return 0;
-}
-
-static void wait_rx_callback_timeout(uint32_t timeout)
-{
-	while (!rx_callback_invoked && timeout) {
-		clk_sys_udelay(WAIT_READ_CB_PERIOD_1MS);
-		timeout--;
-	};
-}
-
-void uart_example_tx_callback(void *data, int error, qm_uart_status_t status,
-			      uint32_t len)
-{
-	uint32_t id = *(uint32_t *)data;
-
-	switch (id) {
-
-	case BANNER_IRQ_ID:
-		qm_uart_write_buffer(STDOUT_UART,
-				     (uint8_t *)BANNER_IRQ_COMPLETE,
-				     sizeof(BANNER_IRQ_COMPLETE));
-		break;
-
-	case BANNER_DMA_ID:
-		qm_uart_write_buffer(STDOUT_UART,
-				     (uint8_t *)BANNER_DMA_COMPLETE,
-				     sizeof(BANNER_DMA_COMPLETE));
-		break;
-
-	default:
-		break;
-	}
-
-	QM_PUTS("\n");
-}
-
-void uart_example_rx_callback(void *data, int error, qm_uart_status_t status,
-			      uint32_t len)
-{
-	uint32_t id = *(uint32_t *)data;
-
-	if (!error || error == -ECANCELED) {
-		/* Transfer successful or RX terminated. */
-		switch (id) {
-		case BANNER_IRQ_ID:
-		case BANNER_DMA_ID:
-			qm_uart_write_buffer(STDOUT_UART, (uint8_t *)RX_STR,
-					     sizeof(RX_STR));
-			qm_uart_write_buffer(STDOUT_UART, rx_buffer, len);
-			rx_callback_invoked = true;
-			break;
-		default:
-			break;
-		}
-	} else {
-		qm_uart_write_buffer(STDOUT_UART, (uint8_t *)ERR_STR,
-				     sizeof(ERR_STR));
-	}
 }

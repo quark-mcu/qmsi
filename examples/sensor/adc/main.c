@@ -27,34 +27,65 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Sensor Subsystem (SS) Analog-to-Digital Converter (ADC)
+ *
+ * This application demonstrates the basic functionality of the ADC driver
+ * for the Sensor Subsystem using Polling and Interrupt based methods.
+ *
+ * This app requires an Intel(R) Quark(TM) SE board to be set up with jumper
+ * cables connecting ADC pin 10 and 11 to 3.3v and GND. The sequence table
+ * will read the value of these pins alternatively.
+ *
+ * The ADC pins 10 and 11 are located on header J14 at pins 14 and 16
+ * respectively. GND and 3.3v are all located on the same header at
+ * pins 12 and 2 respectively.
+ */
+
+#include "qm_common.h"
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_pinmux.h"
 #include "qm_ss_adc.h"
+#include "qm_ss_interrupt.h"
+#include "qm_ss_isr.h"
 #include "qm_uart.h"
 #include "ss_clk.h"
-#include "qm_pinmux.h"
-#include "qm_common.h"
-#include "qm_isr.h"
-#include "qm_ss_isr.h"
-#include "qm_interrupt.h"
-#include "qm_ss_interrupt.h"
-
-/* QMSI SS ADC app example.
- *
- * This app requires a board to be set up with jumper cables connecting ADC pin
- * 10 and 11 to 3.3v and GND. The sequence table will read the value of these
- * pins alternatively.
- *
- * On the Quark SE development platform ADC pins 10 and 11 are located on header
- * J14 at pins 14 and 16 respectively. GND and 3.3v are all located on the same
- * header at pins 12 and 2 respectively.
- */
 
 #define NUM_CHANNELS (2)
 #define NUM_SAMPLES_POLLED (10)
 #define NUM_SAMPLES_INTERRUPT (50)
 
-static void callback(void *, int, qm_ss_adc_status_t, qm_ss_adc_cb_source_t);
-
 static volatile bool complete = false;
+static volatile bool callback_error = true;
+static volatile bool overflow_error = false;
+static volatile bool underflow_error = false;
+static volatile bool seq_error = false;
+
+static void callback(void *data, int error, qm_ss_adc_status_t status,
+		     qm_ss_adc_cb_source_t source)
+{
+	if (!error) {
+		callback_error = false;
+		complete = true;
+	}
+
+	if (status & QM_SS_ADC_OVERFLOW) {
+		overflow_error = true;
+		complete = true;
+	}
+
+	if (status & QM_SS_ADC_UNDERFLOW) {
+		underflow_error = true;
+		complete = true;
+	}
+
+	if (status & QM_SS_ADC_SEQERROR) {
+		seq_error = true;
+		complete = true;
+	}
+	return;
+}
 
 int main(void)
 {
@@ -65,9 +96,9 @@ int main(void)
 	uint16_t samples_polled[NUM_SAMPLES_POLLED] = {0};
 	uint16_t samples_interrupt[NUM_SAMPLES_INTERRUPT] = {0};
 
-	QM_PUTS("\nStarting: SS ADC");
+	QM_PUTS("Starting: SS ADC");
 
-	/* Enable the adc and set the clock divisor. */
+	/* Enable the ADC and set the clock divisor. */
 	ss_clk_adc_enable();
 	ss_clk_adc_set_div(100);
 
@@ -132,6 +163,18 @@ int main(void)
 	while (false == complete)
 		;
 
+	if (!callback_error) {
+		QM_PUTS("---COMPLETE CALLBACK---");
+	} else if (overflow_error) {
+		QM_PUTS("Error: ADC FIFO overflow");
+		return 1;
+	} else if (underflow_error) {
+		QM_PUTS("Error: ADC FIFO underflow");
+		return 1;
+	} else if (seq_error) {
+		QM_PUTS("Error: ADC sequencer error");
+		return 1;
+	}
 	/* Print the values of the samples. */
 	for (i = 0; i < NUM_SAMPLES_INTERRUPT; i++) {
 		QM_PRINTF("%d:%x ", i, (unsigned int)samples_interrupt[i]);
@@ -140,26 +183,4 @@ int main(void)
 	QM_PUTS("\nFinished: SS ADC");
 
 	return 0;
-}
-
-void callback(void *data, int error, qm_ss_adc_status_t status,
-	      qm_ss_adc_cb_source_t source)
-{
-	if (!error) {
-		QM_PUTS("---COMPLETE CALLBACK---");
-		complete = true;
-		return;
-	}
-
-	if (status & QM_SS_ADC_OVERFLOW) {
-		QM_PUTS("Error: ADC FIFO overflow");
-	}
-
-	if (status & QM_SS_ADC_UNDERFLOW) {
-		QM_PUTS("Error: ADC FIFO underflow");
-	}
-
-	if (status & QM_SS_ADC_SEQERROR) {
-		QM_PUTS("Error: ADC sequencer error");
-	}
 }

@@ -27,15 +27,21 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * Version
+ *
+ * This example app prints the QMSI API and ROM version over stdout.
+ */
+
 #include "qm_common.h"
 #include "qm_version.h"
 
-/* Sample application for printing the QMSI API and ROM version over stdout */
 int main(void)
 {
 	uint32_t rom_version = qm_ver_rom();
 
-	QM_PRINTF("Starting: Version\n");
+	QM_PUTS("Starting: Version");
+
 	QM_PRINTF("QMSI API version number (int) is %u\n", QM_VER_API_UINT);
 	QM_PRINTF("QMSI API version number (string) is %s\n",
 		  QM_VER_API_STRING);
@@ -43,6 +49,7 @@ int main(void)
 	QM_PRINTF("QMSI ROM version number (int) is %u\n",
 		  (unsigned int)rom_version);
 
-	QM_PRINTF("Finished: Version\n");
+	QM_PUTS("Finished: Version");
+
 	return 0;
 }

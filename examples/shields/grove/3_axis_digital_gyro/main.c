@@ -27,89 +27,65 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_interrupt.h"
-#include "qm_isr.h"
-#include "qm_rtc.h"
-#include "itg3200_gyro.h"
-
 /*
+ * Grove shield 3 axis digital gyro app example.
+ *
  * This sample application measures the angular velocity using
- * Grove digital gyro sensor v1.3 ITG-3200 on QUARK SE and
- * QUARK D2000.
+ * Grove digital gyro sensor v1.3 ITG-3200 on the Intel(R) Quark(TM) SE
+ * and Quark(TM) D2000 development platforms.
  *
- * The device is connected to I2C port on the grove shield. The
- * pin IDs 22 and 23 are multiplexed to use on QUARK SE and pinIDs
- * 6 and 7 are multiplexed to use on QUARK D2000.
+ * The device is connected to I2C port on the Grove shield. To use on
+ * Intel(R) Quark(TM) SE development platform pins 22 and 23 on header J15 are
+ * multiplexed and to use on Quark(TM) D2000 development platform pins 6 and 7
+ * are multiplexed.
  *
- * More information about the sensor could be found on the below link
+ * More information about the sensor can be found using the following link:
  * http://www.seeedstudio.com/wiki/Grove_-_3-Axis_Digital_Gyro
  *
  * The application configures the I2C and RTC. The RTC callback reads
  * the sensor data registers on a time-quantum and calculates the
- * angular velocity for 3 axis.
+ * angular velocity for 3 axes.
  */
 
-/* Time quantum set to trigger RTC callback. */
-#define ALARM (QM_RTC_ALARM_SECOND >> 3)
-/* Maximum number of samples to be read. */
-#define MAX_SAMPLING (500)
+#include "clk.h"
+#include "itg3200_gyro.h"
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_rtc.h"
 
-/* Sampling count grows till MAX_SAMPLING to limit interrupt triggers. */
+#define ALARM (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1) >> 3) /* 0.125 seconds. */
+#define NUM_SAMPLES (500) /* Number of samples to be read. */
+
+/* Sampling count grows until NUM_SAMPLES to limit interrupt triggers. */
 static volatile uint16_t sampling_count;
-
-/* Set I2C configuration based on SoC. */
-static int i2c_cfg_init(void);
-/* Set RTC configuration. */
-static void rtc_config(void);
-/* RTC callback. */
-static void rtc_callback(void *data);
+static volatile bool print_float = false;
+static float ax, ay, az;
+static int16_t axis[ITG3200_MAX_AXIS] = {0};
 
 /*
- * Entry point function of the application.
- *
- * This routine initializes and configures I2C, sensor
- * registers and RTC.
+ * RTC callback function prints the angular velocity for x, y and z axis and
+ * sets the RTC alarm for next trigger.
  */
-int main(void)
+static void rtc_callback(void *data)
 {
-	int status;
+	int rc;
 
-	QM_PUTS("Starting: Digital gyro sensor reading");
-
-	/* Initialize and register as I2C device. */
-	status = i2c_cfg_init();
-	if (status) {
-		QM_PRINTF("Error: I2C configuration failed! with 0x%x\n",
-			  status);
+	/* Calculate angular velocity for x, y, z axis. */
+	rc = itg3200_gyro_get_angular_vel(&ax, &ay, &az, axis);
+	if (rc) {
+		sampling_count = NUM_SAMPLES;
+		return;
 	}
 
-	/* Initialize device specific configuration. */
-	status = itg3200_gyro_cfg_init();
-	if (status) {
-		QM_PRINTF("Error: sensor configuration failed! with 0x%x\n",
-			  status);
-	}
+	print_float = true;
 
-	if (!status) {
-		/* Initialize and set RTC configuration. */
-		rtc_config();
-
-		/* Wait for RTC to fire MAX_SAMPLING times and then finish. */
-		while (sampling_count < MAX_SAMPLING) {
-		};
-	}
-
-	QM_PUTS("Finished: Digital gyro sensor reading");
-
-	clk_periph_disable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
-
-	return 0;
+	/* Set a new RTC alarm. */
+	++sampling_count;
+	qm_rtc_set_alarm(QM_RTC_0, (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM));
 }
 
 /*
- * Set I2C configuration.
- *
- * This routine enables clock lines for I2C, sets up pin
+ * Set I2C configuration. This enables clock lines for I2C, sets up pin
  * multiplexing for I2C and sets the configuration for I2C.
  */
 static int i2c_cfg_init(void)
@@ -133,10 +109,8 @@ static int i2c_cfg_init(void)
 }
 
 /*
- * Set RTC configuration.
- *
- * This routine registers rtc0 interrupt handler, enables clock,
- * initializes and sets the configuration for RTC.
+ * Set RTC configuration. This function registers RTC0 interrupt handler,
+ * enables clock, initializes and sets the configuration for RTC.
  */
 static void rtc_config(void)
 {
@@ -153,35 +127,49 @@ static void rtc_config(void)
 	rtc_cfg.alarm_val = ALARM;
 	rtc_cfg.callback = rtc_callback;
 	rtc_cfg.callback_data = NULL;
+	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 
 	/* Set RTC configuration. */
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 }
 
-/*
- * RTC callback.
- *
- * This routine is invoked by the RTC subsystem on time-quantum. The
- * routine prints the angular velocity for x, y and z axis.
- * It sets the RTC alarm for next trigger.
- */
-static void rtc_callback(void *data)
+int main(void)
 {
-	int rc;
-	float ax, ay, az;
-	int16_t axis[ITG3200_MAX_AXIS] = {0};
+	int status;
 
-	/* Calculate angular velocity for x, y, z axis. */
-	rc = itg3200_gyro_get_angular_vel(&ax, &ay, &az, axis);
-	if (rc) {
-		sampling_count = MAX_SAMPLING;
-		return;
+	QM_PUTS("Starting: Grove 3 axis digital gyro");
+
+	/* Initialize and register as I2C device. */
+	status = i2c_cfg_init();
+	if (status) {
+		QM_PRINTF("Error: I2C configuration failed! with 0x%x\n",
+			  status);
 	}
 
-	/* Print the angular velocity as float. */
-	itg3200_gyro_print_float(ax, ay, az, axis);
+	/* Initialize device specific configuration. */
+	status = itg3200_gyro_cfg_init();
+	if (status) {
+		QM_PRINTF("Error: sensor configuration failed! with 0x%x\n",
+			  status);
+	}
 
-	/* Set a new RTC alarm. */
-	++sampling_count;
-	qm_rtc_set_alarm(QM_RTC_0, (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM));
+	if (!status) {
+		/* Initialize and set RTC configuration. */
+		rtc_config();
+
+		/* Wait for RTC to fire NUM_SAMPLES times and then finish. */
+		while (sampling_count < NUM_SAMPLES) {
+			if (print_float) {
+				/* Print the angular velocity as float. */
+				itg3200_gyro_print_float(ax, ay, az, axis);
+				print_float = false;
+			}
+		};
+	}
+
+	QM_PUTS("Finished: Grove 3 axis digital gyro");
+
+	clk_periph_disable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
+
+	return 0;
 }

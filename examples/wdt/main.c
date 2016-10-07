@@ -27,60 +27,75 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_wdt.h"
-#include "qm_interrupt.h"
-#include "qm_isr.h"
-
-void wdt_example_callback(void *);
-
-volatile uint32_t wdt_fired;
-
 /*
- * The watchdog timer can operate in two modes.
- * 1. If the timer expires reset the SoC immediately.
- * 2. If the timer expires, generate an interrupt, if the timer is not reloaded
- *    before the timer expires for a second time ,the WDT will reset the SoC.
+ * Watchdog timer (WDT)
  *
- * In this example, we operate in the second mode and reload the WDT every time
- * an interrupt is generated, this way the SoC does not reset.
+ * This app sets up a watchdog timer to fire every 4.096ms which results in the
+ * callback function being invoked and restarts the WDT.
  *
- * Note: on Quark SE, the WDT will automatically pause if the x86 core is in the
- * C2 state. As a result the WDT will not fire or generate interrupts. If
- * using the sensor subsystem, it is advised to use one of the supplied timers
- * to act as a watchdog.
+ * If a second timeout occurs and the WDT has not been reloaded, the SoC resets.
+ * In this example, the SoC will not reset as the WDT is reloaded in interrupt
+ * callback triggered at every timeout.
+ *
+ * Note: on Intel(R) Quark(TM) SE, the WDT will automatically pause if the
+ * x86 core is in the C2 state. As a result the WDT will not fire or generate
+ * interrupts. If using the sensor subsystem, it is advised to use one of the
+ * supplied timers to act as a watchdog.
  */
 
-#define MAX_WDT_FIRINGS (10)
+#include "qm_interrupt.h"
+#include "qm_isr.h"
+#include "qm_wdt.h"
 
-/* QMSI wdt app example */
-int main(void)
+#define NUM_CALLBACKS (10)
+
+static volatile uint32_t cb_count;
+static volatile bool cb_fired = false;
+
+/* Example WDT callback. */
+static void wdt_example_callback(void *data)
 {
-	qm_wdt_config_t wr_cfg;
+	/* Reload the WDT. */
+	qm_wdt_reload(QM_WDT_0);
 
-	QM_PRINTF("Starting: WDT\n");
-
-	wr_cfg.timeout = QM_WDT_2_POW_17_CYCLES;
-	wr_cfg.mode = QM_WDT_MODE_INTERRUPT_RESET;
-	wr_cfg.callback = wdt_example_callback;
-
-	wdt_fired = 0;
-
-	qm_wdt_set_config(QM_WDT_0, &wr_cfg);
-	qm_irq_request(QM_IRQ_WDT_0, qm_wdt_isr_0);
-
-	qm_wdt_start(QM_WDT_0);
-
-	/* Wait for WDT to fire 10 times and then finish. */
-	while (wdt_fired < MAX_WDT_FIRINGS) {
-	}
-	QM_PRINTF("Watchdog fired %d times\n", MAX_WDT_FIRINGS);
-	QM_PRINTF("Finished: WDT\n");
-	return 0;
+	++cb_count;
+	cb_fired = true;
 }
 
-/* WDT Requires a callback, there is no interrupt enable / disable. */
-void wdt_example_callback(void *data)
+int main(void)
 {
-	wdt_fired++;
-	qm_wdt_reload(QM_WDT_0);
+	qm_wdt_config_t cfg;
+
+	QM_PUTS("Starting: WDT");
+
+	cb_count = 0;
+
+	/* Configure the  WDT and request the IRQ. */
+	cfg.timeout = 1; /* Timeout after 2^17 cycles: 4.096ms @ 32MHz.*/
+	cfg.mode = QM_WDT_MODE_INTERRUPT_RESET;
+	cfg.callback = wdt_example_callback;
+#if (HAS_WDT_PAUSE)
+	cfg.pause_en = 0;
+#endif /* HAS_WDT_PAUSE */
+	cfg.callback_data = NULL;
+
+	qm_wdt_set_config(QM_WDT_0, &cfg);
+	qm_irq_request(QM_IRQ_WDT_0, qm_wdt_isr_0);
+
+	/* Start the WDT. */
+	qm_wdt_start(QM_WDT_0);
+
+	/* Wait for WDT to fire NUM_CALLBACKS times and then finish. */
+	while (cb_count < NUM_CALLBACKS) {
+		if (cb_fired) {
+			cb_fired = false;
+			QM_PRINTF("WDT callback trigger count: %d\n", cb_count);
+		}
+	}
+
+	QM_PRINTF("Watchdog fired %d times\n", cb_count);
+
+	QM_PUTS("Finished: WDT");
+
+	return 0;
 }

@@ -29,14 +29,15 @@
 
 ### Variables
 BOARD_DIR = $(BASE_DIR)/board/drivers
-OBJ_DIRS += $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)
-DRIVER_SOURCES = $(foreach drv, $(PERIPH), $(wildcard $(BOARD_DIR)/$(drv)/*.c))
-OBJECTS += $(addprefix $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/,$(notdir $(DRIVER_SOURCES:.c=.o)))
+OBJ_DIR = $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)
+OBJ_DIRS += $(OBJ_DIR)
+DRIVER_SOURCES = $(foreach drv, $(PERIPH),$(wildcard $(BOARD_DIR)/$(drv)/*.c))
+OBJECTS += $(addprefix $(OBJ_DIR)/,$(notdir $(DRIVER_SOURCES:.c=.o)))
 GENERATED_DIRS += $(BOARD_DIR)/$(BUILD)
 
 CFLAGS += -I$(BOARD_DIR)
 
 ### Build C files
-$(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ)/%.o: $(BOARD_DIR)/bmx1xx/%.c
-	$(call mkdir, $(APP_DIR)/$(BUILD)/$(SOC)/$(TARGET)/$(OBJ))
+$(OBJ_DIR)/%.o: $(BOARD_DIR)/bmx1xx/%.c
+	$(call mkdir, $(OBJ_DIR))
 	$(CC) $(CFLAGS) -c -o $@ $<

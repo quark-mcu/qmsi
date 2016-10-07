@@ -40,8 +40,8 @@ ifeq ($(TARGET),sensor)
 $(error Supported TARGET values are 'x86')
 endif
 
-ifeq ($(SOC),quark_d2000)
-$(error Supported SOC values are 'quark_se')
+ifneq ($(SOC),quark_se)
+$(error Supported SOC value is 'quark_se')
 endif
 
 all clean realclean:: $(SUBDIRS)

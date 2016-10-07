@@ -57,9 +57,6 @@ Organization
 
 	.
 	├── board           : Board level drivers
-	├── bootloader      : QMSI Bootloader
-	│   ├── boot        : Common Bootstrap code
-	│   └── dm          : Device Management
 	├── doc             : Project documentation and Guidelines
 	│   └── api         : Doxygen documentation
 	├── drivers         : Intel® SoC drivers
@@ -121,6 +118,12 @@ To build for the ARC:
 
 ``make SOC=quark_se TARGET=sensor``
 
+Note: When building applications for ARC on SE C1000, an x86 application must
+be present which begins execution of the ARC. A sample application which does
+this is present at:
+
+``examples\quark_se\start_arc``
+
 Build modes
 ===========
 
@@ -137,28 +140,8 @@ To build in release mode:
 Targets
 =======
 
-The top level Makefile contains two make targets: ``rom`` and ``libqmsi``.
+The top level Makefile contains one main make target: ``libqmsi``.
 The output directory is ``build``.
-
-The ROM must be flashed on the OTP ROM flash region. To build the ``rom``
-target, run:
-
-``make rom``
-
-When building the ROM, there are two possible build time flags available:
-ENABLE_DM and START_ARC. ENABLE_DM is used to enable device management inside of
-the rom, and START_ARC is used to start the ARC in the ROM.
-
-By default, device management mode is not enabled.
-To build the rom target with device management enabled, run:
-
-``make rom ENABLE_DM=1``
-
-On SE C1000, there is an option to not start the ARC as part of the ROM flow.
-The default behavior for SE C1000 is to start the ARC as part of the ROM flow.
-To build the rom target without starting the ARC, run:
-
-``make rom START_ARC=0``
 
 Libqmsi is a library archive of all the QMSI drivers for the SoC.
 
@@ -181,13 +164,14 @@ Advanced build options
 Some operating systems may use their own interrupt system instead of the one
 provided by QMSI. In order to properly integrate with those OSs, the ISRs
 defined in QMSI drivers should be compiled as regular functions (e.g. no
-interrupt-related prologue and epilogue, no end-of-interrupt handling). To
-achieve that, you should set 'ISR=handled' when building libqmsi.
+interrupt-related prologue and epilogue, no end-of-interrupt handling). So
+when interrupts are handled externally, you should set
+'ENABLE_EXTERNAL_ISR_HANDLING=1' when building libqmsi.
 
-For instance, the following command builds libqmsi for D2000 with no
+For instance, the following command builds libqmsi for D2000 with external
 interrupt handling support.
 
-``make libqmsi SOC=quark_d2000 ISR=handled``
+``make libqmsi SOC=quark_d2000 ENABLE_EXTERNAL_ISR_HANDLING=1``
 
 Flashing
 ========
@@ -214,7 +198,7 @@ Then launch a GDB session using:
 
 ``$ gdb``
 
-To connect to the repote port, enter the following GDB command:
+To connect to the remote port, enter the following GDB command:
 
 ``(gdb) target remote :333X``
 
@@ -225,13 +209,13 @@ For SE C1000 (ARC), the remote port value is 3334.
 
 For D2000, the following commands are used to flash a ROM and application to the device:
 
-``(gdb) monitor load_image $PATH_TO_QMSI/build/release/quark_d2000/rom/quark_d2000_rom.bin 0x0``
+``(gdb) monitor load_image $PATH_TO_QM_BOOTLOADER/build/release/quark_d2000/rom/quark_d2000_rom.bin 0x0``
 
 ``(gdb) monitor load_image $PATH_TO_QMSI/examples/hello_world/release/quark_d2000/x86/bin/hello_world.bin 0x00180000``
 
 For SE C1000, the following commands are used to flash a ROM and application to the device:
 
-``(gdb) monitor load_image $PATH_TO_QMSI/build/release/quark_se/rom/quark_se_rom.bin 0xFFFFE000``
+``(gdb) monitor load_image $PATH_TO_QM_BOOTLOADER/build/release/quark_se/rom/quark_se_rom.bin 0xFFFFE000``
 
 Applications for the Lakemont core are flashed using the following command:
 
@@ -240,12 +224,6 @@ Applications for the Lakemont core are flashed using the following command:
 Applications for the ARC are flashed using the following command:
 
 ``(gdb) monitor load_image $PATH_TO_QMSI/examples/hello_world/release/quark_se/x86/bin/hello_world.bin 0x40030000``
-
-Device Firmware Update (DFU)
-============================
-
-A special bootloader can be built allowing the device to be updated without the
-use of OpenOCD. Please refer to `<doc/dfu.rst>`__ for more information.
 
 Serial Output
 =============
@@ -265,119 +243,25 @@ e.g. /dev/ttyUSB0
 Known Issues and Workarounds
 ****************************
 
-Affected version: QMSI 1.1.0.
+Please see `Known issues <KNOWN_ISSUES.rst>`_. for a list of known issues and
+workarounds. For all fixed issues since the previous release please see
+`Fixed issues <FIXED_ISSUES.rst>`_.
 
-=========== ====================================================================
-Issue       DMA errors are not generated for peripherals with invalid settings
------------ --------------------------------------------------------------------
-Implication If an invalid address is provided for a peripheral in a DMA
-            transfer, an error callback is not triggered.
------------ --------------------------------------------------------------------
-Workaround  Use correct addresses for peripherals in DMA transfers.
-=========== ====================================================================
+ROM memory usage
+****************
+The following table dictates ROM memory usage for this version of QMSI.
 
-=========== ====================================================================
-Issue       SPI 16 MHz transfer failing on SE C1000 development platform
------------ --------------------------------------------------------------------
-Implication On SE C1000, comparison of RX and TX is not correct when using the
-            16 MHz speed.
------------ --------------------------------------------------------------------
-Workaround  Use a transfer speed slower than 16 MHz.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       I2C high speed mode fails on SE C1000 Development Platform
------------ --------------------------------------------------------------------
-Implication On the SE C1000 development platform, Fab A/B, 330Ω resistor causes
-            I2C transfers to fail in high-speed scenarios.
------------ --------------------------------------------------------------------
-Workaround  Use the SE C1000 development platform Fab C, which has a 33Ω
-            resistor.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       UART - DMA transfers do not immediately report errors.
------------ --------------------------------------------------------------------
-Implication Break interrupts or FIFO overruns may not be caught in a DMA UART
-            transfer.
------------ --------------------------------------------------------------------
-Workaround  If interrupts are required, use IRQ-based transfers instead.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       If an application wakes up from power_soc_sleep() using the RTC on
-            D2000, and completes, the system becomes bricked.
------------ --------------------------------------------------------------------
-Implication The system is not fully restored from the soc_sleep function when
-            using RTC as wake up source.
------------ --------------------------------------------------------------------
-Workaround  The function power_soc_sleep() needs to be updated with the
-            following:
-	    Place the following line at the start of the function:
-	    uint32_t lp_clk_save = QM_SCSS_CCU->ccu_lp_clk_ctl;
-	    Place the following line at the end of the function(last line).
-	    QM_SCSS_CCU->ccu_lp_clk_ctl = lp_clk_save;
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       D2000 hangs if the UART prints during soc_deep_sleep before the
-            system has fully restored to the active state.
------------ --------------------------------------------------------------------
-Implication If the user callback attempts to send data over the UART during a
-            soc_deep_sleep callback when the system is still transitioning to
-	    the active state, the system will hang on wake.
------------ --------------------------------------------------------------------
-Workaround  Avoid printing over the UART during user callbacks until after the
-            SoC has fully resumed operations in the active state.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       Grove shield electricity sensor does not compile for x86 on SE
-            C1000.
------------ --------------------------------------------------------------------
-Implication Building the example application for x86 on the SE C1000 will result
-            in a compilation error
------------ --------------------------------------------------------------------
-Workaround  Compile the example for the SE C1000 ARC.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       Power_soc sample application comment: "On the SE C1000 development
-            platform this pin is found on header J13 PIN 20".
------------ --------------------------------------------------------------------
-Implication Incorrect header number in comment
------------ --------------------------------------------------------------------
-Workaround  Should be J14 not J13
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       GPIO sample app comments say: "On the SE C1000 development board,
-            PIN_OUT and PIN_INTR are located on header P4 PIN 42 and 40"
------------ --------------------------------------------------------------------
-Implication Incorrect header number in comment
------------ --------------------------------------------------------------------
-Workaround  Should be J15 not P4
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       sensor/gpio sample app comments say: "On the SE C1000 development
-            platform, PIN_OUT (J15 header, PIN 36) and PIN_INTR (J15 header,
-	    PIN 42)."
------------ --------------------------------------------------------------------
-Implication Incorrect pin number in comment
------------ --------------------------------------------------------------------
-Workaround  Should be pin 40 not 42
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       sensor/interrupt sample App	comments say: "On the SE C1000
-            development platform, PIN_OUT and PIN_INTR are located on header
-	    J15, PIN 36 and 42 respectively"
------------ --------------------------------------------------------------------
-Implication Incorrect pin number in comment
------------ --------------------------------------------------------------------
-Workaround  Should be pin 40 not 42
-=========== ====================================================================
+======== ======= ========================= ========================
+SoC      Build   Data Size (Start address) BSS Size (Start address)
+-------- ------- ------------------------- ------------------------
+D2000    Debug   12 (0x002801A0)           2048 (0x002801C0)
+-------- ------- ------------------------- ------------------------
+D2000    Release 12 (0x002801A0)           2048 (0x002801C0)
+-------- ------- ------------------------- ------------------------
+SE C1000 Debug   20 (0xA800A220)           2048 (0xA800A240)
+-------- ------- ------------------------- ------------------------
+SE C1000 Release 20 (0xA800A220)           2048 (0xA800A240)
+======== ======= ========================= ========================
 
 Change Log
 **********
@@ -427,6 +311,7 @@ Supported features
 * Universal Asynchronous Receiver/Transmitter (UART).
 * Update utilities.
 * Watchdog Timer (WDT).
+* Universal Serial Bus (USB) 1.1
 
 Unsupported Features
 ====================
@@ -434,3 +319,7 @@ Unsupported Features
 * Serial Peripheral Interface (SPI) slave.
 * Inter-Integrated Circuit (I2C) slave.
 * I2S
+
+.. Hyperlink targets
+.. _`Bootloader README`:
+        https://github.com/quark-mcu/qm-bootloader/blob/master/README.rst

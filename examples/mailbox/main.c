@@ -27,179 +27,189 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "qm_mailbox.h"
-#include "qm_interrupt.h"
-#include "qm_uart.h"
+/*
+ * Mailbox
+ *
+ * This example app is exclusive to the Intel(R) Quark(TM) SE SoC. This app
+ * shows the use of mailboxes with interrupts. The sensor subsystem echoes back
+ * all messages sent by the x86 processor.
+ *
+ * This example must be compiled for x86 and sensor subsystem targets, and both
+ * binary objects must be loaded on the target.
+ */
+
+#if (!QM_SENSOR)
+#include <x86intrin.h>
+#endif
 #include "clk.h"
+#include "get_ticks.h"
+#include "qm_interrupt.h"
 #include "qm_isr.h"
+#include "qm_mailbox.h"
 
-#define TEST_CASES_NUM 12
-#define MBOX_READ_TIMEOUT 1000UL /* timeout 1sec */
-#define DELAY 1000
+#define SYS_TICKS_PER_S_32MHZ (SYS_TICKS_PER_US_32MHZ * 1000000)
+#define NUM_TRANSFERS (5)
 
-#if (QM_SENSOR)
-#define QM_MBOX_PRINTF(...)
-#else
-#define QM_MBOX_PRINTF(...) printf(__VA_ARGS__)
+/*
+ * Disable Sensor printf output.
+ * UART for printf is shared between x86 processor and sensor subsystem. To
+ * avoid conflicts, initialisation of UART by sensor subsystem is disabled in
+ * the Makefile and printf and puts calls are disabled hereafter.
+ */
+#define DISABLE_SENSOR_PRINTF 1
+#if (DISABLE_SENSOR_PRINTF && QM_SENSOR)
+#undef QM_PUTS
+#undef QM_PRINTF
+#define QM_PUTS(...)
+#define QM_PRINTF(...)
 #endif
 
-int loopback_one(int pair);
-int read_and_verify(qm_mbox_ch_t mbox, int loop);
-void mbox_cb(void *data);
-
-/*
- * Declaration of the flags used to know when a mailbox message has been
- * received.
- */
-volatile bool mb_got_message[QM_MBOX_CH_NUM] = {false, false, false, false,
-						false, false, false, false};
-
+volatile bool cb_fired = false;
+volatile int transfer_count = 0;
 qm_mbox_msg_t tx_data, rx_data;
-qm_mbox_ch_t mbox_pairs[TEST_CASES_NUM][2] = {
-    {QM_MBOX_CH_0, QM_MBOX_CH_1}, {QM_MBOX_CH_2, QM_MBOX_CH_3},
-    {QM_MBOX_CH_4, QM_MBOX_CH_5}, {QM_MBOX_CH_6, QM_MBOX_CH_7},
-    {QM_MBOX_CH_0, QM_MBOX_CH_4}, {QM_MBOX_CH_1, QM_MBOX_CH_5},
-    {QM_MBOX_CH_2, QM_MBOX_CH_6}, {QM_MBOX_CH_3, QM_MBOX_CH_7},
-    {QM_MBOX_CH_4, QM_MBOX_CH_0}, {QM_MBOX_CH_5, QM_MBOX_CH_1},
-    {QM_MBOX_CH_6, QM_MBOX_CH_2}, {QM_MBOX_CH_7, QM_MBOX_CH_3}};
-int ofset = 0x100;
 
-/*
- * QMSI MAILBOX app example
- *
- * This app is example of data loopbacked from LMT to SS and back over to LMT.
- * The loopback mailbox channels are defined in mbox_pairs[][].
-  * mailbox channel. Test case scenario is:
- * 1. data sent from LMT over the mbox channel defined in mbox_pairs
- * 2. SS handles an interrupt request for data on the same channel.
- * 3. send data from SS over the paired mbox channel defined in mbox_pairs
- * 4. LMT will handle an interrupt request for data on the same channel.
- * 5. repeat steps 1-4 for the every channel pair defined in mbox_pairs
- */
+qm_mbox_ch_t mbox_pair[2] = {QM_MBOX_CH_0, QM_MBOX_CH_1};
+
+qm_mbox_config_t mbox_rx_config;
+
+/* Mailbox callback on available data. */
+void mailbox_example_cb(void *callback_data)
+{
+	cb_fired = true;
+}
+
+/* Send a message. */
+int send_data(qm_mbox_ch_t mbox_tx, uint32_t value)
+{
+#if (QM_SENSOR)
+	/* For sensor, copy received data. */
+	tx_data = rx_data;
+#else
+	/* On x86 core , write an initial value in transfered data registers. */
+	tx_data.ctrl = value;
+	tx_data.data[0] = value + 1;
+	tx_data.data[1] = value + 2;
+	tx_data.data[2] = value + 3;
+	tx_data.data[3] = value + 4;
+#endif /* QM_SENSOR */
+
+	/* Actually send message here. */
+	if (0 != qm_mbox_ch_write(mbox_tx, &tx_data)) {
+		QM_PRINTF("Error: mbox %d write\n", mbox_tx);
+		return 1;
+	}
+
+	return 0;
+}
+
+/* Check received data and send a new message. */
+int check_rx_data_and_send(qm_mbox_ch_t mbox_rx, qm_mbox_ch_t mbox_tx)
+{
+	/* Read the mailbox. */
+	if (0 != qm_mbox_ch_read(mbox_rx, &rx_data)) {
+		QM_PRINTF("Error: Reading failed on mbox=%d, "
+			  "ctrl=%d.\n",
+			  mbox_rx, (int)rx_data.ctrl);
+		return 1;
+	} else {
+#if (!QM_SENSOR)
+		/*
+		 * On x86 core, compare data sent and received.
+		 * They should be the same as sensor subsystem
+		 * echoes back data.
+		 */
+		if (tx_data.ctrl == rx_data.ctrl &&
+		    tx_data.data[0] == rx_data.data[0] &&
+		    tx_data.data[1] == rx_data.data[1] &&
+		    tx_data.data[2] == rx_data.data[2] &&
+		    tx_data.data[3] == rx_data.data[3]) {
+			QM_PRINTF("Message %d OK !\n", transfer_count);
+		}
+#endif
+		/* Send a new message. */
+		if (transfer_count < NUM_TRANSFERS) {
+			++(transfer_count);
+
+			if (0 != send_data(mbox_tx, transfer_count)) {
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 int main(void)
 {
-	int i;
-	QM_MBOX_PRINTF("Starting: Mailbox Loop-back example - Demonstrating "
-		       "MAILBOX interrupt functionality\n");
-
-	for (i = 0; i < TEST_CASES_NUM; i++) {
-		if (-EIO == loopback_one(i)) {
-			return 0;
-		}
-	}
-	QM_MBOX_PRINTF("Finished: Mailbox Loop-back example\n");
-	return 0;
-}
-
-int loopback_one(int pair)
-{
-	int i;
+#if (QM_SENSOR)
+	uint32_t t_init;
+#else
+	uint64_t t_init;
+#endif
+	int retcode = 0;
 	qm_mbox_ch_t mbox_tx, mbox_rx;
 
+	QM_PUTS("Starting: Mailbox");
+
 #if (QM_SENSOR)
-	mbox_rx = mbox_pairs[pair][0];
-	mbox_tx = mbox_pairs[pair][1];
+	/* Choose mailbox channels for RX and TX. */
+	mbox_rx = mbox_pair[0];
+	mbox_tx = mbox_pair[1];
+
+	mbox_rx_config.dest = QM_MBOX_TO_SS;
+
 #else
-	mbox_rx = mbox_pairs[pair][1];
-	mbox_tx = mbox_pairs[pair][0];
-	QM_MBOX_PRINTF("Mailbox: TX channel %d -> RX channel %d:\n", mbox_tx,
-		       mbox_rx);
+	/*
+	 * Choose mailbox channels for RX and TX.
+	 * If one mailbox is chosen as a RX or TX on sensor, they must
+	 * be configured respectively as TX or RX on x86 core.
+	 */
+	mbox_rx = mbox_pair[1];
+	mbox_tx = mbox_pair[0];
+	QM_PRINTF("Mailbox: TX channel %d -> RX channel %d\n", mbox_tx,
+		  mbox_rx);
+
+	mbox_rx_config.dest = QM_MBOX_TO_LMT;
+
 #endif
 
-	/* Configure the mailbox for this channel */
-	qm_mbox_ch_data_ack(mbox_tx); /* clean DATA status bit on TX */
+	mbox_rx_config.mode = QM_MBOX_INTERRUPT_MODE;
+	mbox_rx_config.callback = mailbox_example_cb;
+	mbox_rx_config.callback_data = NULL;
+
 	/* Register the interrupt handler. */
 	qm_irq_request(QM_IRQ_MBOX, qm_mbox_isr);
-	qm_mbox_ch_set_config(mbox_rx, mbox_cb, (void *)&mbox_rx,
-			      true); /* configure RX channel */
 
-	rx_data.ctrl = 0;
-	rx_data.data[0] = 0;
-	rx_data.data[1] = 0;
-	rx_data.data[2] = 0;
-	rx_data.data[3] = 0;
+	/* Configure RX channel. */
+	qm_mbox_ch_set_config(mbox_rx, &mbox_rx_config);
 
-	for (i = 0; i < 10; i++) {
-		tx_data.ctrl = ofset + i + 1;
-		tx_data.data[0] = ofset + i + 2;
-		tx_data.data[1] = ofset + i + 3;
-		tx_data.data[2] = ofset + i + 4;
-		tx_data.data[3] = ofset + i + 5;
+#if (!QM_SENSOR)
+	/* x86 core sends data first. */
+	if (0 != send_data(mbox_tx, transfer_count)) {
+		retcode = 1;
+	}
 
-#if (QM_SENSOR)
-		if (0 == read_and_verify(mbox_rx, i)) {
-		} else {
-			QM_MBOX_PRINTF("Error: mbox %d read %d\n", mbox_rx, i);
-			return -EIO;
-		}
-#endif /* Run the test for all test pairs. */
-
-		if (0 != (unsigned int)qm_mbox_ch_write(mbox_tx, &tx_data)) {
-			QM_MBOX_PRINTF("Error: mbox %d write %d\n", mbox_tx, i);
-			return -EIO;
-		}
-
-#if !defined(QM_SENSOR)
-		if (0 == read_and_verify(mbox_rx, i)) {
-			QM_MBOX_PRINTF("ch-%d loop-%d -> OK;\n", mbox_rx, i);
-		} else {
-			QM_MBOX_PRINTF("Error: mbox %d read %d\n", mbox_rx, i);
-			return -EIO;
-		}
 #endif
-	}
+	/* Get system tick time before starting the loop. */
+	t_init = get_ticks();
 
-	/* DeConfigure the mailbox channel 0 */
-	qm_mbox_ch_set_config(mbox_rx, NULL, NULL, false);
+	/*
+	 * Wait for 1 second to be elapsed or NUM_TRANSFERS transfers to
+	 * succeed.
+	 */
+	while (((get_ticks() - t_init) < SYS_TICKS_PER_S_32MHZ) &&
+	       (transfer_count < NUM_TRANSFERS)) {
 
-	return 0;
-}
+		if (cb_fired) {
+			cb_fired = false;
 
-int read_and_verify(qm_mbox_ch_t mbox, int loop)
-{
-	int i;
-
-/* Loop here, waiting mailbox IRQ */
-#if DEBUG
-	/* In DEBUG build we wait forever.
-	 * To allow breakpoints on the other core */
-	while (false == mb_got_message[mbox]) {
-#else
-	int wait_loop = MBOX_READ_TIMEOUT;
-	while ((false == mb_got_message[mbox]) && (wait_loop--)) {
-#endif
-		clk_sys_udelay(DELAY);
-	}
-
-	if (true != mb_got_message[mbox]) {
-		QM_MBOX_PRINTF("Error: Reading failed on timeout\n");
-		return -EIO;
-	}
-	mb_got_message[mbox] = false;
-	/* Verify the Mailbox context */
-	if (rx_data.ctrl != tx_data.ctrl) {
-		QM_MBOX_PRINTF("Error: Reading failed on ctrl tx-%d, rx-%d\n",
-			       (int)tx_data.ctrl, (int)rx_data.ctrl);
-		return -EIO;
-	}
-	for (i = 0; i < 4; i++) {
-		if (rx_data.data[i] != tx_data.data[i]) {
-			QM_MBOX_PRINTF(
-			    "Error: Reading failed on data[%d] tx-%d,"
-			    " rx-%d\n",
-			    i, (int)tx_data.data[i], (int)rx_data.data[i]);
-			return -EIO;
+			if (check_rx_data_and_send(mbox_rx, mbox_tx)) {
+				retcode = 1;
+			}
 		}
 	}
-	return 0;
-}
 
-void mbox_cb(void *mbox)
-{
-	qm_mbox_ch_t *ch = (qm_mbox_ch_t *)mbox;
-	if (0 != qm_mbox_ch_read(*ch, &rx_data)) {
-		QM_MBOX_PRINTF("Error: Reading failed on mbox=%d, ctrl=%d.\n",
-			       *ch, (int)rx_data.ctrl);
-	}
-	mb_got_message[*ch] = true;
+	QM_PUTS("Finished: Mailbox");
+
+	return retcode;
 }

@@ -37,7 +37,7 @@ BASE_DIR := ../../..
 APP_DIR := .
 
 ifeq ($(SOC),quark_se)
-$(error Supported SOC values are 'quark_d2000')
+$(error Supported SOC value is 'quark_d2000')
 endif
 
 ### Make includes

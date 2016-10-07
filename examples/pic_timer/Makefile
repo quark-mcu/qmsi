@@ -37,7 +37,7 @@ BASE_DIR := ../..
 APP_DIR := .
 
 ifeq ($(TARGET), sensor)
-$(error Supported TARGET values are 'x86')
+$(error Supported TARGET value is 'x86')
 endif
 
 ### Make includes
