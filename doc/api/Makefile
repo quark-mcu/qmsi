@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-PDF_NAME= "Quark Microcontroller Software Interface 1.1.pdf"
+PDF_NAME= "Quark Microcontroller Software Interface 1.2.pdf"
 
 V ?= 0
 
