@@ -91,3 +91,13 @@ int qm_rtc_set_alarm(const qm_rtc_t rtc, const uint32_t alarm_val)
 
 	return 0;
 }
+
+int qm_rtc_read(const qm_rtc_t rtc, uint32_t *const value)
+{
+	QM_CHECK(rtc < QM_RTC_NUM, -EINVAL);
+	QM_CHECK(value != NULL, -EINVAL);
+	*value = QM_RTC[rtc].rtc_ccvr;
+
+	return 0;
+}
+
