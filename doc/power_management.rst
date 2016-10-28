@@ -105,6 +105,9 @@ This option is enabled by default for Quark SE C1000.
 **Note: This feature will only work if RAM is preserved during sleep.
 This is a platform design prerequisite.**
 
+**Note: The USB peripheral on Quark SE C1000 does not support save / restore.
+This is a known hardware limitation.**
+
 In addition, please note that in order for this feature to work as expected,
 the bootloader also needs to be built with the ENABLE_RESTORE_FEATURE
 turned on.
