@@ -143,8 +143,8 @@ int main(void)
 	QM_PUTS("\nADC interrupt mode");
 
 	/* Request the necessary IRQs. */
-	qm_ss_irq_request(QM_SS_IRQ_ADC_IRQ, qm_ss_adc_0_isr);
-	qm_ss_irq_request(QM_SS_IRQ_ADC_ERR, qm_ss_adc_0_err_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_INT, qm_ss_adc_0_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_ERROR_INT, qm_ss_adc_0_error_isr);
 
 	/* Set up xfer. */
 	xfer.ch = channels;

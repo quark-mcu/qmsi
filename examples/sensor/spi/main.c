@@ -116,9 +116,10 @@ static void spi_transfer_irq(void)
 	irq_trans.callback = spi_cb;
 
 	/* Register interrupts. */
-	qm_ss_irq_request(QM_SS_IRQ_SPI_0_ERR_INT, qm_ss_spi_0_err_isr);
-	qm_ss_irq_request(QM_SS_IRQ_SPI_0_RX_AVAIL, qm_ss_spi_0_rx_isr);
-	qm_ss_irq_request(QM_SS_IRQ_SPI_0_TX_REQ, qm_ss_spi_0_tx_isr);
+	qm_ss_irq_request(QM_SS_IRQ_SPI_0_ERROR_INT, qm_ss_spi_0_error_isr);
+	qm_ss_irq_request(QM_SS_IRQ_SPI_0_RX_AVAIL_INT,
+			  qm_ss_spi_0_rx_avail_isr);
+	qm_ss_irq_request(QM_SS_IRQ_SPI_0_TX_REQ_INT, qm_ss_spi_0_tx_req_isr);
 
 	tx_buffer[0] = 0x80; /* Read chip ID. */
 

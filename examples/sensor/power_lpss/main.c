@@ -28,7 +28,7 @@
  */
 
 /*
- * Low Power Sensing Standby (LPSS) State
+ * Sensor Subsystem (SS) Low Power Sensing Standby (LPSS) State
  *
  * This application must run in conjunction with its Host counterpart
  * located in ./examples/quark_se/power_lpss/.
@@ -84,7 +84,7 @@ int main(void)
 	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/*
 	 * Enable LPSS by the Sensor Subsystem.

@@ -60,8 +60,8 @@ int main(void)
 	QM_PUTS("Starting: SS Power Core");
 
 	/* Request IRQ. */
-	qm_ss_int_vector_request(QM_SS_INT_TIMER_0, qm_ss_timer_isr_0);
-	qm_ss_irq_unmask(QM_SS_INT_TIMER_0);
+	qm_ss_int_vector_request(QM_ARC_TIMER_0_INT, qm_ss_timer_0_isr);
+	qm_ss_irq_unmask(QM_ARC_TIMER_0_INT);
 
 	/*  Initialise Timer configuration. */
 	ss_timer_cfg.watchdog_mode = false;
@@ -104,7 +104,7 @@ int main(void)
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	QM_PUTS("Go to ss1. Core Off Timers Off RTC On");
 	/* Go to SS1, RTC will wake. */

@@ -89,8 +89,19 @@ OBJCOPY_0 = @echo "Objcopy $@" && $(PREFIX)-objcopy
 OBJCOPY_1 = $(PREFIX)-objcopy
 OBJCOPY = $(OBJCOPY_$(V))
 
+# gcc-ar seems to be broken with arc toolchain, but gcc-arc is only needed if
+# BUILD is set to lto.
+ifeq ($(TARGET) , sensor)
 AR_0 = @echo "AR $@" && $(PREFIX)-ar
 AR_1 = $(PREFIX)-ar
+# lto currently doesn't work with arc target.
+ifeq ($(BUILD), lto)
+$(error Sensor TARGET doesn't support lto BUILD option)
+endif
+else
+AR_0 = @echo "AR $@" && $(PREFIX)-gcc-ar
+AR_1 = $(PREFIX)-gcc-ar
+endif
 AR = $(AR_$(V))
 
 CC_0 = @echo "CC $@" && $(PREFIX)-gcc
@@ -123,7 +134,12 @@ $(info Asserts will be switched off in debug mode due to code size limitation)
 endif
 else ifeq ($(BUILD), release)
 CFLAGS += -Os -fomit-frame-pointer
+else ifeq ($(BUILD), lto)
+CFLAGS += -Os -fomit-frame-pointer -flto
+LDFLAGS += -flto
 else
+# In addition of debug and release, BUILD also support lto, but it's a hidden
+# option for now.
 $(error Supported BUILD values are 'release' and 'debug')
 endif
 $(info BUILD = $(BUILD))
@@ -172,7 +188,7 @@ $(info VERSION = '$(QM_VER_API)')
 ifeq ($(BUILD), debug)
 LIBQMSI_FILENAME = lib$(LIBNAME)_$(SOC)_$(QM_VER_API)d.a
 LDLIBS_FILENAME = $(LIBNAME)_$(SOC)_$(QM_VER_API)d
-else ifeq ($(BUILD), release)
+else ifneq (, $(filter $(BUILD), release lto))
 LIBQMSI_FILENAME = lib$(LIBNAME)_$(SOC)_$(QM_VER_API).a
 LDLIBS_FILENAME = $(LIBNAME)_$(SOC)_$(QM_VER_API)
 endif

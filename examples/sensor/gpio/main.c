@@ -74,12 +74,12 @@ int main(void)
 	QM_PUTS("Starting: SS GPIO");
 
 	/* Set GPIO mux mode. */
-	qm_pmux_pullup_en(PIN_INTR, true);
-	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
-	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
+	qm_pmux_pullup_en(QM_PIN_ID_11, true);
+	qm_pmux_select(QM_PIN_ID_11, QM_PMUX_FN_0);
+	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_0);
 
 	/* Enable input on PIN_INTR. */
-	qm_pmux_input_en(PIN_INTR, true);
+	qm_pmux_input_en(QM_PIN_ID_11, true);
 
 	/* Request IRQ and write SS GPIO port config. */
 	conf.direction = BIT(PIN_OUT);      /* Set PIN_OUT to output. */
@@ -93,7 +93,7 @@ int main(void)
 	/* Enable clock. */
 	ss_clk_gpio_enable(QM_SS_GPIO_0);
 
-	qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, qm_ss_gpio_isr_0);
+	qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, qm_ss_gpio_0_isr);
 
 	qm_ss_gpio_set_config(QM_SS_GPIO_0, &conf);
 

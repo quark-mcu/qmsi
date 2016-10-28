@@ -28,7 +28,7 @@
  */
 
 /*
- * QMSI D2000 SoC power app example.
+ * Quark D2000 Power
  *
  * This app demonstrates the power functions of the Intel(R) Quark(TM)
  * D2000 SoC.
@@ -72,7 +72,8 @@ static void ac_example_callback()
 	 * a constant stream of interrupts if we do not mask them. Comment out
 	 * the following line if you want to get more than one interrupt.
 	 */
-	QM_SCSS_INT->int_comparators_host_mask |= BIT(WAKEUP_COMPARATOR_PIN);
+	QM_INTERRUPT_ROUTER->comparator_0_host_int_mask |=
+	    BIT(WAKEUP_COMPARATOR_PIN);
 }
 #else
 static void gpio_example_callback(void *data, uint32_t status)
@@ -82,7 +83,7 @@ static void gpio_example_callback(void *data, uint32_t status)
 	 * get a constant stream of interrupts if we do not mask it. Comment
 	 * out the following line if you want to get more than one interrupt.
 	 */
-	QM_SCSS_INT->int_gpio_mask |= BIT(0);
+	QM_INTERRUPT_ROUTER->gpio_0_int_mask |= BIT(0);
 }
 #endif
 static void rtc_sleep_wakeup()
@@ -104,7 +105,7 @@ static void rtc_sleep_wakeup()
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	QM_PUTS("CPU Halt.");
 	/* Halt the CPU, RTC alarm will wake. */
@@ -112,7 +113,7 @@ static void rtc_sleep_wakeup()
 	QM_PUTS("CPU Halt wakeup.");
 
 	/* Setup wake up isr for RTC. */
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Set another alarm one second from now. */
 	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
@@ -146,7 +147,7 @@ static void comparator_gpio_sleep_wakeup()
 	ac_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
 	ac_cfg.callback = ac_example_callback;
 	qm_ac_set_config(&ac_cfg);
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
+	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 #else
 	gpio_cfg.direction = 0;
 	gpio_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Interrupt enabled. */
@@ -156,7 +157,7 @@ static void comparator_gpio_sleep_wakeup()
 	gpio_cfg.int_bothedge = 0;	    /* Both edge disabled. */
 	QM_GPIO[QM_GPIO_0]->gpio_ls_sync = 0; /* No synchronisation. */
 	gpio_cfg.callback = gpio_example_callback;
-	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
+	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 	qm_gpio_set_config(QM_GPIO_0, &gpio_cfg);
 #endif /* USE_COMPARATOR_FOR_DEEP_SLEEP. */
 

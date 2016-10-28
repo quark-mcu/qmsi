@@ -28,7 +28,11 @@
  */
 
 /*
- * QMSI Analog to Digital Converter (ADC) continuous conversion app example.
+ * Quark D2000 Analog-to-Digital Converter (ADC) Continuous Conversion
+ *
+ * This application demonstrates how to extend QMSI's
+ * Analog-to-Digital-Converter (ADC) driver to use it in continuous convert
+ * mode by reading data from its FIFO into a ring buffer.
  *
  * This app requires an Intel(R) Quark(TM) D2000 development platform.
  *
@@ -101,7 +105,7 @@ QM_ISR_DECLARE(adc_0_continuous_isr)
 	}
 
 	/* Clear interrupt. */
-	QM_ISR_EOI(QM_IRQ_ADC_0_VECTOR);
+	QM_ISR_EOI(QM_IRQ_ADC_0_CAL_INT_VECTOR);
 }
 
 /* Transfer callback. */
@@ -144,7 +148,7 @@ int main(void)
 	cfg.resolution = QM_ADC_RES_12_BITS;
 	qm_adc_set_config(QM_ADC_0, &cfg);
 
-	qm_irq_request(QM_IRQ_ADC_0, adc_0_continuous_isr);
+	qm_irq_request(QM_IRQ_ADC_0_CAL_INT, adc_0_continuous_isr);
 
 	/* Set up transfer. */
 	xfer.ch = channels;

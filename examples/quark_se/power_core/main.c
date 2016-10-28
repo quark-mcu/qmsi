@@ -28,9 +28,9 @@
  */
 
 /*
- * QMSI Power core app example.
+ * Quark SE C1000 Power Core
  *
- * This example demonstrates core states.
+ * This example demonstrates C1, C2 and C2LP core states.
  *
  * The core is woken up by the PIC timer.
  *
@@ -60,7 +60,7 @@ int main(void)
 	pic_cfg.callback = NULL;
 	pic_cfg.callback_data = NULL;
 
-	qm_int_vector_request(QM_INT_VECTOR_PIC_TIMER, qm_pic_timer_isr);
+	qm_int_vector_request(QM_X86_PIC_TIMER_INT_VECTOR, qm_pic_timer_0_isr);
 
 	qm_pic_timer_set_config(&pic_cfg);
 
@@ -98,7 +98,7 @@ int main(void)
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	QM_PUTS("Go to C2LP.");
 

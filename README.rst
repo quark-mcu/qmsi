@@ -173,6 +173,27 @@ interrupt handling support.
 
 ``make libqmsi SOC=quark_d2000 ENABLE_EXTERNAL_ISR_HANDLING=1``
 
+Saving CPU context on sleep modes
+=================================
+
+The Quark SE has support for sleep states that power off the CPU. When a
+wake event happens, the CPU starts over from the reset vector as in a normal
+power on. It is possible to build libqmsi with support to restore the CPU
+context when coming back from sleep. To do so, build both libqmsi and the
+bootloader with 'ENABLE_RESTORE_CONTEXT=1' (see the `Bootloader README`_ for
+information on how to compile the bootloader).
+
+``make libqmsi SOC=quark_se ENABLE_RESTORE_CONTEXT=1``
+
+Make sure you have flashed the ROM firmware built with ENABLE_RESTORE_CONTEXT=1
+otherwise this feature won't work properly.
+
+This feature is currently implemented only for the x86 core.
+
+Quark D2000 doesn't power off the CPU so the execution context is not lost.
+For that reason, the ENABLE_RESTORE_CONTEXT option has no effect on Quark D2000
+SoC.
+
 Flashing
 ========
 

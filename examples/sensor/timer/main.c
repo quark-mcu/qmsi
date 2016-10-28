@@ -71,8 +71,8 @@ int main(void)
 	 * Request and unmask the timer interrupt. Timer interrupts and
 	 * exceptions must be registered with the following function.
 	 */
-	qm_ss_int_vector_request(QM_SS_INT_TIMER_0, qm_ss_timer_isr_0);
-	qm_ss_irq_unmask(QM_SS_INT_TIMER_0);
+	qm_ss_int_vector_request(QM_ARC_TIMER_0_INT, qm_ss_timer_0_isr);
+	qm_ss_irq_unmask(QM_ARC_TIMER_0_INT);
 
 	/* Configure the timer. */
 	cfg.watchdog_mode = false;

@@ -28,7 +28,7 @@
  */
 
 /*
- * Voltage Regulator app example.
+ * Voltage Regulator
  *
  * This example demonstrates voltage regulator states.
  */

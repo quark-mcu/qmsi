@@ -84,7 +84,7 @@ int main(void)
 	cfg.callback = NULL;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
+	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 

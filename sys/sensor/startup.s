@@ -39,6 +39,12 @@
 	.align 4
 	.global _reset
 
+#
+# Context save/restore definitions
+#
+.equ GPS0_REGISTER, 0xb0800100
+.equ RESTORE_SS_BIT, 2
+
 /**
  * Make the first four bytes of the Sensor Subsystem flash partition point to
  * the Sensor Subsystem _reset entry point.
@@ -52,6 +58,18 @@ _reset:
 	/* Invalidate I-Cache */
 	sr 0x12345678,[0x10]
 
+#if (ENABLE_RESTORE_CONTEXT)
+	/* Check is this wakeup after sleep event. */
+	ld r0,[GPS0_REGISTER]
+	bbit0 r0,RESTORE_SS_BIT,_stack_handler
+	bclr_s r0,r0,RESTORE_SS_BIT
+	st r0,[GPS0_REGISTER]
+	ld r0,[arc_restore_addr]
+	j [r0]
+
+_stack_handler:
+#endif
+
 	/* Set stack on top of the cos_stack array. */
 	mov sp, __stack_start
 
@@ -62,5 +80,10 @@ _reset:
 _loop:
 	b _loop
 .endfunc
+
+	.section .data.entry
+	.align 4
+	.global arc_restore_addr
+arc_restore_addr: .word 0
 
 .end

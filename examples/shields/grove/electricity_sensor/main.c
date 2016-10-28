@@ -28,7 +28,7 @@
  */
 
 /*
- * Grove Electricity sensor app example.
+ * Grove Shield Electricity Sensor
  *
  * This application works with shield and Grove electricity sensor TA12-200.
  * The example assumes that the sensor is connected to A0 on Grove shield.
@@ -165,7 +165,7 @@ static void adc_continuous_isr_handler(const qm_adc_t adc)
 QM_ISR_DECLARE(adc_0_continuous_isr)
 {
 	adc_continuous_isr_handler(QM_ADC_0);
-	QM_ISR_EOI(QM_IRQ_ADC_0_VECTOR);
+	QM_ISR_EOI(QM_IRQ_ADC_0_CAL_INT_VECTOR);
 }
 #endif /* QUARK D2000. */
 
@@ -194,7 +194,7 @@ static int start_irq_conversion(void)
 {
 #if (QUARK_D2000)
 	/* Register the ISR routine. */
-	qm_irq_request(QM_IRQ_ADC_0, adc_0_continuous_isr);
+	qm_irq_request(QM_IRQ_ADC_0_CAL_INT, adc_0_continuous_isr);
 #endif
 
 	/* Set up xfer. */
@@ -225,8 +225,8 @@ static int setup_adc(void)
 	qm_pmux_input_en(QM_PIN_ID_10, true);
 
 	/* Request the necessary IRQs. */
-	qm_ss_irq_request(QM_SS_IRQ_ADC_IRQ, adc_0_continuous_isr);
-	qm_ss_irq_request(QM_SS_IRQ_ADC_ERR, qm_ss_adc_0_err_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_INT, adc_0_continuous_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_ERROR_INT, qm_ss_adc_0_error_isr);
 
 	/* Set the mode and calibrate. */
 	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_NORM_CAL);

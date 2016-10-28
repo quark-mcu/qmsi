@@ -168,7 +168,7 @@ void spi_irq_mode(void)
 	QM_PUTS("IRQ-based TXRX started");
 
 	/* Register driver IRQ. */
-	qm_irq_request(QM_IRQ_SPI_MASTER_0, qm_spi_master_0_isr);
+	qm_irq_request(QM_IRQ_SPI_MASTER_0_INT, qm_spi_master_0_isr);
 
 	/* Reset the buffers. */
 	spi_buff_reset();
@@ -212,9 +212,9 @@ void spi_dma_mode(void)
 	compare_tx_rx_buffers = false;
 
 	/* Register the DMA interrupts. */
-	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_1, qm_dma_0_isr_1);
-	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
+	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+	qm_irq_request(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
+	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/*  Initialise SPI configuration. */
 	cfg.frame_size = QM_SPI_FRAME_SIZE_8_BIT;
