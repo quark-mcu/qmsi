@@ -75,7 +75,7 @@ int main(void)
 	mpr_base = SRAM_BASE + (lower_bound * MPR_PAGE_SIZE);
 
 	/* Request the IRQ. */
-	qm_irq_request(QM_IRQ_SRAM, qm_mpr_isr);
+	qm_irq_request(QM_IRQ_SRAM_MPR_0_INT, qm_sram_mpr_0_isr);
 
 	/* Set the violation policy to trigger an interrupt. */
 	qm_mpr_set_violation_policy(MPR_VIOL_MODE_INTERRUPT,

@@ -72,7 +72,7 @@ interrupt API.
                 /* Handle interrupt here */
 
                 /* Signal end of interrupt via QM_ISR_EOI macro */
-                QM_ISR_EOI(QM_IRQ_RTC_0_VECTOR);
+                QM_ISR_EOI(QM_IRQ_RTC_0_INT_VECTOR);
         }
 
         int main(void)
@@ -82,7 +82,7 @@ interrupt API.
                  * This installs the custom_rtc_isr ISR to the RTC vector and
                  * steers the interrupt to the core which is running this code.
                  */
-                qm_irq_request(QM_IRQ_RTC_0, my_rtc_isr);
+                qm_irq_request(QM_IRQ_RTC_0_INT, my_rtc_isr);
 
                 return 0;
         }
@@ -123,4 +123,3 @@ Also there is no specific support for exceptions.
 It is possible to handle an exception by registering it as a standard
 interrupt, with the caveat exception-specific details must be explicitly
 handled in the ISR (e.g. error codes pushed in the stack by x86 hardware).
-

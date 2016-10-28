@@ -63,9 +63,9 @@ int main(void)
 	cfg.callback = example_timer_callback;
 
 #if (HAS_APIC) /* Request the interrupt. */
-	qm_int_vector_request(QM_INT_VECTOR_PIC_TIMER, qm_pic_timer_isr);
+	qm_int_vector_request(QM_X86_PIC_TIMER_INT_VECTOR, qm_pic_timer_0_isr);
 #elif(HAS_MVIC)
-	qm_irq_request(QM_IRQ_PIC_TIMER, qm_pic_timer_isr);
+	qm_irq_request(QM_IRQ_PIC_TIMER, qm_pic_timer_0_isr);
 #endif /* HAS_APIC */
 
 	/* Write the config and start the timer. */

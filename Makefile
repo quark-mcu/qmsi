@@ -33,7 +33,8 @@ SUPPORTED_SOCS = quark_se \
                  quark_d2000
 
 SUPPORTED_BUILDS = debug \
-                   release
+                   release \
+		   lto
 
 SOC ?= $(DEFAULT_SOC)
 TARGET ?= $(DEFAULT_TARGET)

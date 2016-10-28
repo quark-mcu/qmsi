@@ -70,7 +70,7 @@ int main(void)
 	cfg.callback_data = NULL;
 	cfg.prescaler = CLK_RTC_DIV_1;
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Enable RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER);
@@ -80,10 +80,11 @@ int main(void)
 
 	/* Wait for RTC to fire NUM_CALLBACKS times. */
 	while (cb_count < NUM_CALLBACKS) {
-		if (cb_fired) {
-			cb_fired = false;
-			QM_PRINTF("RTC alarm trigger count: %d\n", cb_count);
+		/* Wait for the callback to fire. */
+		while (!cb_fired) {
 		}
+		cb_fired = false;
+		QM_PRINTF("RTC alarm trigger count: %d\n", cb_count);
 	}
 
 	/* Disable RTC. */

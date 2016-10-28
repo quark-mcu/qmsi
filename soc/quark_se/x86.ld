@@ -39,7 +39,9 @@ MEMORY
 	/* Place IDT at the bottom of SRAM, 68 gate wide */
 	esram_idt (rw)	: ORIGIN = 0xA800A000, LENGTH = 0x220
 	esram (rw)	: ORIGIN = 0xA800A220, LENGTH = 40K - 1K - 0x220
-	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K
+	stack (rw)	: ORIGIN = 0xA8013C00, LENGTH = 1K - 0x4
+	/* Shared RAM */
+	esram_restore_info (rw) : ORIGIN = 0xA8013FFC, LENGTH = 0x4
 }
 
 /* Sensor Subsystem reset vector definition */
@@ -48,6 +50,9 @@ __sensor_reset_vector = ORIGIN(sensor_vectors);
 /* IDT definition */
 __idt_start = ORIGIN(esram_idt);
 __idt_end = __idt_start + LENGTH(esram_idt);
+
+/* Shared RAM definition */
+__x86_restore_info = ORIGIN(esram_restore_info);
 
 SECTIONS
 {

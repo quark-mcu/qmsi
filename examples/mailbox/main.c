@@ -178,7 +178,7 @@ int main(void)
 	mbox_rx_config.callback_data = NULL;
 
 	/* Register the interrupt handler. */
-	qm_irq_request(QM_IRQ_MBOX, qm_mbox_isr);
+	qm_irq_request(QM_IRQ_MAILBOX_0_INT, qm_mailbox_0_isr);
 
 	/* Configure RX channel. */
 	qm_mbox_ch_set_config(mbox_rx, &mbox_rx_config);

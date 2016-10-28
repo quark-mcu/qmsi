@@ -96,9 +96,9 @@ int main(void)
 
 /* Set the violation policy to trigger an interrupt. */
 #if (QUARK_D2000)
-	qm_irq_request(QM_IRQ_FLASH_0, qm_fpr_isr_0);
+	qm_irq_request(QM_IRQ_FLASH_MPR_0_INT, qm_flash_mpr_0_isr);
 #elif(QUARK_SE)
-	qm_irq_request(QM_IRQ_FLASH_1, qm_fpr_isr_1);
+	qm_irq_request(QM_IRQ_FLASH_MPR_1_INT, qm_flash_mpr_1_isr);
 #endif /* QUARK_D2000 */
 
 	qm_fpr_set_violation_policy(FPR_VIOL_MODE_INTERRUPT, fpr_flash,
