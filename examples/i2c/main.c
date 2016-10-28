@@ -251,9 +251,9 @@ void i2c_irq_combined_transaction_example()
 void i2c_dma_setup()
 {
 	/* Request interrupts for the DMA controller. */
-	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_1, qm_dma_0_isr_1);
-	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
+	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+	qm_irq_request(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
+	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* Init DMA controller. */
 	if (qm_dma_init(QM_DMA_0)) {
@@ -349,7 +349,7 @@ int main(void)
 
 	QM_PUTS("Starting: I2C");
 
-	qm_irq_request(QM_IRQ_I2C_0, qm_i2c_0_isr);
+	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);

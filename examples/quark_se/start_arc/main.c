@@ -29,16 +29,34 @@
 
 #include "qm_soc_regs.h"
 #include "ss_init.h"
+#include "power_states.h"
 
 /*
- * Start the ARC running.
+ * Start the ARC Running.
  *
  * This example exemplifies how x86 applications may start ARC execution.
+ *
+ * When ENABLE_RESTORE_CONTEXT feature is enabled, the x86 needs to be ready
+ * to resume the ARC after sleep.
+ * To achieve this, the x86 core saves its context, and wait for ARC to trigger
+ * sleep. After wake-up, the x86 resumes execution where it stopped and
+ * resumes the ARC core.
  */
 
 int main(void)
 {
+#if (ENABLE_RESTORE_CONTEXT)
+	while (1) {
+		/* Start ARC. */
+		sensor_activation();
+
+		/* Wait for ARC to enter sleep. */
+		power_sleep_wait();
+	}
+#else
+	/* Start ARC. */
 	sensor_activation();
+#endif
 
 	return 0;
 }

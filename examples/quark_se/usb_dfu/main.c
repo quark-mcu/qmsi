@@ -28,11 +28,11 @@
  */
 
 /*
- * QMSI USB Device Firmware Update device class example.
+ * USB Device Firmware Update (DFU) Device Class
  *
- * This app is intended to demonstrate the basic usage of the QMSI USB API
- * through the implementation of the DFU Device Class. Only runtime mode from
- * DFU is implemented.
+ * This app demonstrates the basic usage of the QMSI USB API through the
+ * implementation of the DFU Device Class. Only runtime mode from DFU is
+ * implemented.
  */
 
 #include "qm_comparator.h"
@@ -58,7 +58,7 @@ static qm_ac_config_t ac_cfg = {0};
 static void usb_detected_cb(void *data, uint32_t status)
 {
 	/* Avoid an interrupt 'deluge'. */
-	QM_SCSS_INT->int_comparators_host_mask |= BIT(USB_DETECT_CMP);
+	QM_INTERRUPT_ROUTER->comparator_0_host_int_mask |= BIT(USB_DETECT_CMP);
 
 	usb_plugged = !usb_plugged;
 
@@ -91,7 +91,7 @@ static void usb_detected_cb(void *data, uint32_t status)
 	}
 
 	/* Enable interrupts for this comparator once again. */
-	QM_SCSS_INT->int_comparators_host_mask &= ~BIT(USB_DETECT_CMP);
+	QM_INTERRUPT_ROUTER->comparator_0_host_int_mask &= ~BIT(USB_DETECT_CMP);
 }
 
 static void enable_usb_vbus(void)
@@ -118,8 +118,8 @@ int main(void)
 	qm_pmux_input_en(QM_PIN_ID_7, true);
 
 	/* Setup ISRs for USB and Comparator. */
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
-	qm_irq_request(QM_IRQ_USB_0, qm_usb_0_isr_0);
+	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
+	qm_irq_request(QM_IRQ_USB_0_INT, qm_usb_0_isr);
 
 	/* Apply comparator config. */
 	qm_ac_set_config(&ac_cfg);

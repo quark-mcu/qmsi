@@ -86,7 +86,7 @@ int main(void)
 	cfg.callback = gpio_example_callback;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_GPIO_0, qm_gpio_isr_0);
+	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 
 	/* Enable pullup on interrupt pin. */
 	qm_pmux_pullup_en(PIN_INTR, true);

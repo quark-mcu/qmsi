@@ -74,7 +74,7 @@ int main(void)
 	cfg.int_en = true;  /* Interrupts enabled. */
 	cfg.callback = aonpt_example_callback;
 
-	qm_irq_request(QM_IRQ_AONPT_0, qm_aonpt_isr_0);
+	qm_irq_request(QM_IRQ_AONPT_0_INT, qm_aonpt_0_isr);
 
 	qm_aonpt_set_config(QM_AONC_0, &cfg);
 

@@ -80,17 +80,17 @@ int main(void)
 	cfg.callback_data = NULL;
 
 	qm_wdt_set_config(QM_WDT_0, &cfg);
-	qm_irq_request(QM_IRQ_WDT_0, qm_wdt_isr_0);
+	qm_irq_request(QM_IRQ_WDT_0_INT, qm_wdt_0_isr);
 
 	/* Start the WDT. */
 	qm_wdt_start(QM_WDT_0);
 
 	/* Wait for WDT to fire NUM_CALLBACKS times and then finish. */
 	while (cb_count < NUM_CALLBACKS) {
-		if (cb_fired) {
-			cb_fired = false;
-			QM_PRINTF("WDT callback trigger count: %d\n", cb_count);
-		}
+		while (!cb_fired) {
+		} /* Wait for the callback to fire. */
+		cb_fired = false;
+		QM_PRINTF("WDT callback trigger count: %d\n", cb_count);
 	}
 
 	QM_PRINTF("Watchdog fired %d times\n", cb_count);

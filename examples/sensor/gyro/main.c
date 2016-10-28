@@ -28,7 +28,7 @@
  */
 
 /*
- * Gyroscope
+ * Sensor Subsystem (SS) Gyroscope
  *
  * This application will read the gyro data from the onboard sensor on the
  * Intel(R) Quark(TM) SE development platform and print it to the console every
@@ -89,7 +89,7 @@ int main(void)
 	rtc.callback_data = NULL;
 	rtc.prescaler = CLK_RTC_DIV_1;
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Enable the RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);

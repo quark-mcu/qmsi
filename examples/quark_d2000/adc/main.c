@@ -117,7 +117,7 @@ int main(void)
 	/* ADC interrupt mode example. */
 	QM_PUTS("\nADC interrupt mode");
 
-	qm_irq_request(QM_IRQ_ADC_0, qm_adc_0_isr);
+	qm_irq_request(QM_IRQ_ADC_0_CAL_INT, qm_adc_0_cal_isr);
 
 	/* Set up xfer. */
 	xfer.ch = channels;

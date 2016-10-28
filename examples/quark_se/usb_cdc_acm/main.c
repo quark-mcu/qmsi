@@ -28,11 +28,11 @@
  */
 
 /*
- * QMSI USB Communication Device Class (Abstract Control Model) app example.
+ * USB Communication Device Class (Abstract Control Model)
  *
- * This app is intended to demonstrate the basic usage of the QMSI USB API
- * through the implementation of a serial console over USB through the CDC-ACM
- * Device Class.
+ * This app demonstrates the basic usage of the QMSI USB API through the
+ * implementation of a serial console over USB through the
+ * CDC-ACM Device Class.
  */
 
 #include <stdio.h>
@@ -107,7 +107,7 @@ int main(void)
 
 	QM_PUTS("Starting: USB CDC ACM Example");
 
-	qm_irq_request(QM_IRQ_USB_0, qm_usb_0_isr_0);
+	qm_irq_request(QM_IRQ_USB_0_INT, qm_usb_0_isr);
 
 	/* Enable the USB VBUS on Quark SE DevBoard. */
 	enable_usb_vbus();

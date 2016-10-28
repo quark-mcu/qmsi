@@ -28,7 +28,7 @@
  */
 
 /*
- * Grove shield 3 axis digital gyro app example.
+ * Grove Shield 3 Axis Digital Gyro
  *
  * This sample application measures the angular velocity using
  * Grove digital gyro sensor v1.3 ITG-3200 on the Intel(R) Quark(TM) SE
@@ -117,7 +117,7 @@ static void rtc_config(void)
 	qm_rtc_config_t rtc_cfg;
 
 	/* Register RTC ISR for periodical interrupt. */
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
 

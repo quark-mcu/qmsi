@@ -131,7 +131,7 @@ int main(void)
 	/* Set the configuration of the PWM. */
 	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &cfg);
 	/* Register the ISR with the SoC. */
-	qm_irq_request(QM_IRQ_PWM_0, qm_pwm_isr_0);
+	qm_irq_request(QM_IRQ_PWM_0_INT, qm_pwm_0_isr);
 
 	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_PWM);
 	/* Start PWM0 channel 1. */

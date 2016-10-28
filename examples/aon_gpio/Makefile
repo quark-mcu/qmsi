@@ -33,7 +33,7 @@
 APP_NAME = aon_gpio
 SOC ?= quark_se
 TARGET ?= x86
-BASE_DIR := ../../..
+BASE_DIR := ../..
 APP_DIR := .
 
 ### Make includes

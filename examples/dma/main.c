@@ -28,7 +28,7 @@
  */
 
 /*
- * QMSI Memory to memory Direct Memory Access (DMA) transfer example app.
+ * Memory to Memory Direct Memory Access (DMA) Transfer
  *
  * This app demonstrates the basic functionality of the QMSI DMA API by doing a
  * memory to memory copy.
@@ -58,6 +58,9 @@ typedef struct {
 /* Data to be copied. */
 static char tx_data[] = "The DMA example application shows how to initiate a "
 			"memory to memory transfer.";
+static char tx_data_multiblock[] =
+    "[<---- DMA block A --->][<---- DMA block B --->]"
+    "[<---- DMA block C --->][<---- DMA block D --->]";
 
 /* Copy destinations. */
 static char rx_data[NUM_TRANSFERS][RX_BUFF_SIZE] = {{0}};
@@ -197,11 +200,12 @@ static void do_transfer_multi(dma_channel_desc_t *p_chan_desc)
 
 	/* Add LLIs for second half of tx_data (blocks C and D). */
 	multi_transfer.block_size =
-	    strlen(tx_data) /
+	    strlen(tx_data_multiblock) /
 	    (MULTIBLOCK_NUM_BUFFERS * MULTIBLOCK_NUM_LLI_PER_BUFFER);
 	multi_transfer.num_blocks = MULTIBLOCK_NUM_LLI_PER_BUFFER;
 	multi_transfer.source_address =
-	    (uint32_t *)&tx_data[strlen(tx_data) / MULTIBLOCK_NUM_BUFFERS];
+	    (uint32_t *)&tx_data_multiblock[strlen(tx_data_multiblock) /
+					    MULTIBLOCK_NUM_BUFFERS];
 	multi_transfer.destination_address = (uint32_t *)&rx_data[0][0];
 	multi_transfer.linked_list_first = &lli_buf[0];
 	return_code = qm_dma_multi_transfer_set_config(
@@ -212,10 +216,10 @@ static void do_transfer_multi(dma_channel_desc_t *p_chan_desc)
 	}
 
 	/* Add LLIs for first half of tx_data (blocks A and B). */
-	multi_transfer.source_address = (uint32_t *)&tx_data[0];
+	multi_transfer.source_address = (uint32_t *)&tx_data_multiblock[0];
 	multi_transfer.destination_address =
-	    (uint32_t *)&rx_data[0][(strlen(tx_data) / MULTIBLOCK_NUM_BUFFERS) +
-				    5];
+	    (uint32_t *)&rx_data[0][RX_BUFF_SIZE - (strlen(tx_data_multiblock) /
+						    MULTIBLOCK_NUM_BUFFERS)];
 	multi_transfer.linked_list_first =
 	    &lli_buf[MULTIBLOCK_NUM_LLI_PER_BUFFER];
 	return_code = qm_dma_multi_transfer_set_config(
@@ -248,10 +252,11 @@ int main(void)
 	/*
 	 * Request the required interrupts. Depending on the channel used a
 	 * different isr is set:
-	 *     qm_irq_request(QM_IRQ_DMA_<channel>, qm_dma_0_isr_<channel>)
+	 *     qm_irq_request(QM_IRQ_DMA_0_INT_<channel>,
+	 * qm_dma_0_isr_<channel>)
 	 */
-	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
+	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* Set the controller and channel IDs. */
 	chan_desc.controller_id = QM_DMA_0;

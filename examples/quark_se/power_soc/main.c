@@ -28,239 +28,33 @@
  */
 
 /*
- * Power SoC app example.
+ * Quark SE C1000 Power SoC
  *
- * This app requires a comparator to wake the SoC from deep sleep. RTC will be
- * explicitly disabled in deep sleep and WDT is disabled in C2. Disabling the
- * RTC is not required but this is done to showcase comparator wake up when in
- * deep sleep mode.
+ * This application demonstrates SE C1000 Power states. States executed in this
+ * example are SLEEP, DEEP_SLEEP and ADVANCED_SLEEP.
  *
- * On the Intel(R) Quark(TM) SE development platform the comparator pin is
- * located on header J14 pin 20.
+ * Two versions of the example are available:
+ *     - power_soc_reset: The example goes to sleep and reset.
+ *     - power_soc_restore: The example goes to sleep and is restored.
  *
- * Wake up from SoC sleep and SoC deep sleep states result in a processor core
- * reset. In order to retain the previous state, this application makes use of
- * General Purpose Register 2.
- *
- * States executed in this example are:
- * SLEEP: Core voltage rail off, peripherals off except Always On.
- *        Wake up from reset vector.
- * DEEP_SLEEP: Core voltage rail off,
- *             1P8V voltage regulator in linear mode,
- *             3P3V voltage regulator in linear mode,
- *             peripherals off except Always On.
- *             Wake up from reset vector.
- * ADVANCED SLEEP: Core voltage rail off.
- *                 1P8V voltage regulator in shutdown mode,
- *                 3P3V voltage regulator in linear mode,
- *                 peripherals off except Always On.
- *                 Wake up from reset vector.
+ *     Check separate files for more details.
  */
 
-#include "power_states.h"
 #include "qm_common.h"
-#include "qm_comparator.h"
-#include "qm_gpio.h"
-#include "qm_interrupt.h"
-#include "qm_isr.h"
-#include "qm_pinmux.h"
-#include "qm_rtc.h"
-#include "vreg.h"
 
-#define WAKEUP_COMPARATOR_PIN (13)
-#define QM_AC_COMPARATORS_MASK (0x7FFFF)
-#define PIN_READY (4)
-#define QM_SCSS_GP_SOC_STATE_SLEEP BIT(0)
-#define QM_SCSS_GP_SOC_STATE_DEEP_SLEEP BIT(1)
-#define QM_SCSS_GP_SOC_STATE_ADVANCED_SLEEP BIT(2)
-#define RTC_SYNC_CLK_COUNT (5)
-
-/* Power SoC example callback. */
-static void power_soc_callback(void *data, uint32_t status)
-{
-	/* Set comparator ready to true. */
-	*(bool *)data = true;
-}
-
-static void setup_aon_comparator(void)
-{
-	qm_ac_config_t ac_cfg;
-
-	QM_PUTS("Setting up Comparator.");
-
-	/* Set up pin muxing and request IRQ. */
-	qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_13, true);
-
-	/* Clear all comparator pending interrupts. */
-	QM_SCSS_CMP->cmp_pwr = 0;
-	QM_SCSS_CMP->cmp_stat_clr = QM_AC_COMPARATORS_MASK;
-
-	/* Configure the comparator and request the IRQ. */
-	ac_cfg.reference =
-	    BIT(WAKEUP_COMPARATOR_PIN); /* Ref internal voltage. */
-	ac_cfg.polarity = 0x0; /* Fire if greater than ref (high level). */
-	ac_cfg.power = BIT(WAKEUP_COMPARATOR_PIN);  /* Normal operation mode. */
-	ac_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
-	qm_ac_set_config(&ac_cfg);
-
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
-}
-
-static void wait_user_ready(void)
-{
-	volatile bool ready = false;
-	qm_gpio_port_config_t cfg;
-
-	/* Configure the GPIO port and request the IRQ. */
-	cfg.direction = 0;		    /* Set all pins as inputs. */
-	cfg.int_en = BIT(PIN_READY);	/* Interrupt enabled. */
-	cfg.int_type = BIT(PIN_READY);      /* Edge sensitive interrupt. */
-	cfg.int_polarity = ~BIT(PIN_READY); /* Falling edge. */
-	cfg.int_debounce = BIT(PIN_READY);  /* Debounce enabled. */
-	cfg.int_bothedge = 0x0;		    /* Both edge disabled. */
-	cfg.callback = power_soc_callback;
-	cfg.callback_data = (void *)&ready;
-
-	qm_irq_request(QM_IRQ_AONGPIO_0, qm_aon_gpio_isr_0);
-
-	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
-
-	while (ready == false) {
-	}
-}
-
-static void app_sleep()
-{
-	qm_rtc_config_t rtc_cfg;
-	uint32_t aonc_start;
-
-	/* Configure the RTC and request the IRQ. */
-	rtc_cfg.init_val = 0;
-	rtc_cfg.alarm_en = true;
-	rtc_cfg.alarm_val = QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1) << 2;
-	rtc_cfg.callback = NULL;
-	rtc_cfg.callback_data = NULL;
-	rtc_cfg.prescaler = CLK_RTC_DIV_1;
-
-	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
-
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
-
-	QM_PUTS("Go to sleep.");
-
-	/* Save the state in GPS2 for host wake up information. */
-	QM_SCSS_GP->gps2 |= QM_SCSS_GP_SOC_STATE_SLEEP;
-
-	/*
-	 * The RTC clock resides in a different clock domain to the
-	 * system clock. It takes 3-4 RTC ticks for a system clock
-	 * write to propagate to the RTC domain. If an entry to sleep
-	 * is initiated without waiting for the transaction to complete
-	 * the SOC will not wake from sleep.
-	 */
-	aonc_start = QM_AONC[0].aonc_cnt;
-	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT)
-		;
-
-	/* Go to sleep, RTC will wake me up. */
-	power_soc_sleep();
-
-	/* This is unreachable code and should never be executed. */
-	QM_PUTS("Error: Reached unreachable code.");
-}
-
-static void app_deep_sleep()
-{
-	setup_aon_comparator();
-
-	QM_PUTS("Go to deep sleep. Trigger comparator to wake up.");
-	/* Save the state in GPS2 for host signal. */
-	QM_SCSS_GP->gps2 = QM_SCSS_GP_SOC_STATE_DEEP_SLEEP;
-	/* Disable RTC during sleep to be only woken up by external
-	 * interrupt. */
-	QM_SCSS_PMU->slp_cfg |= QM_SCSS_SLP_CFG_RTC_DIS;
-	/* Go to deep sleep, Comparator will wake me up. */
-	power_soc_deep_sleep();
-
-	/* This is unreachable code and should never be executed. */
-	QM_PUTS("Error: Reached unreachable code.");
-}
-
-static void app_advanced_deep_sleep()
-{
-	setup_aon_comparator();
-
-	QM_PUTS("Go to deep sleep. Trigger comparator to wake up.");
-
-	/* Save the state in GPS2 for host signal. */
-	QM_SCSS_GP->gps2 = QM_SCSS_GP_SOC_STATE_ADVANCED_SLEEP;
-	/*
-	 * Disable RTC during sleep to be only woken up by external
-	 * interrupt.
-	 */
-	QM_SCSS_PMU->slp_cfg |= QM_SCSS_SLP_CFG_RTC_DIS;
-
-	/*
-	 * Configure the regulators. This configuration enables lower
-	 * power consumption than the deep sleep function. This takes
-	 * the assumption that the 1P8 voltage regulator can be safely
-	 * turned off. This may not be true for your board.
-	 */
-	vreg_plat1p8_set_mode(VREG_MODE_SHUTDOWN);
-	vreg_plat3p3_set_mode(VREG_MODE_LINEAR);
-
-	/* Enable low power sleep mode. */
-	QM_SCSS_PMU->slp_cfg |= QM_SCSS_SLP_CFG_LPMODE_EN;
-	QM_SCSS_PMU->pm1c |= QM_SCSS_PM1C_SLPEN;
-
-	/* This is unreachable code and should never be executed. */
-	QM_PUTS("Error: Reached unreachable code.");
-}
+#if (ENABLE_RESTORE_CONTEXT)
+#include "power_soc_restore.h"
+#else
+#include "power_soc_reset.h"
+#endif
 
 int main(void)
 {
-	bool start = false, sleep_wakeup = false, deep_sleep_wakeup = false;
-
-	/*
-	 * The GPS2 sticky register will retain its value across resets and is
-	 * used here to store the previous state of the SoC. The app will have
-	 * a different flow if it is starting the first time or coming out of
-	 * one of the three sleep states.
-	 */
-	if (QM_SCSS_GP->gps2 & QM_SCSS_GP_SOC_STATE_SLEEP) {
-		sleep_wakeup = true;
-		QM_PUTS("SoC states example back from sleep.");
-	} else if (QM_SCSS_GP->gps2 & QM_SCSS_GP_SOC_STATE_DEEP_SLEEP) {
-		deep_sleep_wakeup = true;
-		QM_PUTS("SoC states example back from deep sleep.");
-	} else if (QM_SCSS_GP->gps2 & QM_SCSS_GP_SOC_STATE_ADVANCED_SLEEP) {
-		QM_PUTS("SoC states example back from advanced sleep.");
-	} else {
-		start = true;
-		QM_PUTS("Starting: Power SoC");
-	}
-
-	/* Reset state in GPS2 (sticky register). */
-	QM_SCSS_GP->gps2 = 0;
-
-	if (start) {
-		QM_PUTS("Press PB0 to go to sleep.");
-		wait_user_ready();
-		app_sleep();
-	} else if (sleep_wakeup) {
-		QM_PUTS(
-		    "Set comparator pin to Ground and press PB0 when ready.");
-		wait_user_ready();
-		app_deep_sleep();
-	} else if (deep_sleep_wakeup) {
-		QM_PUTS(
-		    "Set comparator pin to Ground and press PB0 when ready.");
-		wait_user_ready();
-		app_advanced_deep_sleep();
-	}
-
-	QM_PUTS("Finished: Power SoC");
+#if (ENABLE_RESTORE_CONTEXT)
+	power_soc_restore();
+#else
+	power_soc_reset();
+#endif
 
 	return 0;
 }

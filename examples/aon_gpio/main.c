@@ -73,7 +73,7 @@ int main(void)
 	cfg.callback = aon_gpio_example_callback;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_AONGPIO_0, qm_aon_gpio_isr_0);
+	qm_irq_request(QM_IRQ_AON_GPIO_0_INT, qm_aon_gpio_0_isr);
 
 	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
 
