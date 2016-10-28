@@ -28,12 +28,15 @@
  */
 
 /*
- * QMSI Sensor Subsystem Interrupt app examples.
+ * Sensor Subsystem (SS) Interrupt
+ *
+ * This application contains both a Sensor Subsystem GPIO interrupt driven
+ * example and SW driven common interrupt example.
  *
  * This example includes two apps:
  * 1. SS GPIO interrupt driven app - interrupt handling is requested with:
  *
- *    qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, ss_gpio_interrupt_isr);
+ *    qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, ss_gpio_interrupt_isr);
  *
  *    The app requires an Intel(R) Quark(TM) SE development platform to be set
  *    up with a jumper cable connecting the pins listed below so the output pin
@@ -44,7 +47,7 @@
  *
  * 2. SW driven common interrupt app - interrupt handling is requested with:
  *
- *    qm_irq_request(QM_IRQ_I2C_1, sw_interrupt_isr);
+ *    qm_irq_request(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
  *
  */
 
@@ -83,7 +86,7 @@ static void ss_gpio_interrupt_example(void)
 	__builtin_arc_sr(BIT(2), QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DDR);
 
 	/* Register the SS GPIO interrupt. */
-	qm_ss_irq_request(QM_SS_IRQ_GPIO_INTR_0, ss_gpio_interrupt_isr);
+	qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, ss_gpio_interrupt_isr);
 
 	/* Set the bit 3 to rising edge-sensitive. */
 	__builtin_arc_sr(BIT(3), QM_SS_GPIO_0_BASE + QM_SS_GPIO_INTTYPE_LEVEL);
@@ -124,7 +127,7 @@ static void ss_sw_triggered_interrupt_example(void)
 	uint32_t i;
 	QM_PUTS("Starting: SW triggered interrupt");
 
-	qm_irq_request(QM_IRQ_I2C_1, sw_interrupt_isr);
+	qm_irq_request(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
 
 	QM_GPIO[0]->gpio_swporta_ddr |= BIT(LED_BIT);
 	for (i = 0; i < NUM_LOOPS; i++) {
@@ -133,7 +136,7 @@ static void ss_sw_triggered_interrupt_example(void)
 		QM_GPIO[0]->gpio_swporta_dr &= ~BIT(LED_BIT);
 		clk_sys_udelay(DELAY);
 		/* SW mainpulated interrupt trigger, triggers I2C_1. */
-		__builtin_arc_sr(QM_IRQ_I2C_1_VECTOR, QM_SS_AUX_IRQ_HINT);
+		__builtin_arc_sr(QM_IRQ_I2C_1_INT_VECTOR, QM_SS_AUX_IRQ_HINT);
 	}
 	if (counter == NUM_LOOPS) {
 		QM_PUTS("Success");

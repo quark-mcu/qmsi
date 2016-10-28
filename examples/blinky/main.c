@@ -28,9 +28,9 @@
  */
 
 /*
- * QMSI blinky app example.
+ * LED_Blink
  *
- * This app will blink a LED on the development platform indefinitely.
+ * This app will blink an LED on the development platform indefinitely.
  *
  * In order for this application to work correctly on the Intel(R) Quark(TM)
  * Microcontroller D2000 Development Platform, jumper J3 must be set to USR.

@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2016, Intel Corporation
  * All rights reserved.
@@ -132,7 +131,7 @@ int main(void)
 	rtc.callback_data = NULL;
 	rtc.prescaler = CLK_RTC_DIV_1;
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Enable the RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);

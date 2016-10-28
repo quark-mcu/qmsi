@@ -65,13 +65,14 @@ int main(void)
 	 *
 	 * All interrupts below will wake up the Sensor Subsystem.
 	 */
-	qm_irq_request(QM_IRQ_RTC_0, dummy_isr);
-	qm_irq_request(QM_IRQ_AC, dummy_isr);
-	qm_irq_request(QM_IRQ_AONPT_0, dummy_isr);
-	qm_irq_request(QM_IRQ_AONGPIO_0, dummy_isr);
+	qm_irq_request(QM_IRQ_RTC_0_INT, dummy_isr);
+	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, dummy_isr);
+	qm_irq_request(QM_IRQ_AONPT_0_INT, dummy_isr);
+	qm_irq_request(QM_IRQ_AON_GPIO_0_INT, dummy_isr);
 
 	/* Unmask comparator interrupts for the Sensor Subsystenm */
-	QM_SCSS_INT->int_comparators_ss_mask &= ~QM_AC_COMPARATORS_MASK;
+	QM_INTERRUPT_ROUTER->comparator_0_ss_halt_int_mask &=
+	    ~QM_AC_COMPARATORS_MASK;
 
 	/*
 	 * Enable LPSS by the Sensor Subsystem.

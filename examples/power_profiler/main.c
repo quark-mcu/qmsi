@@ -90,7 +90,7 @@ static void led_flip(unsigned int pin)
 static void rtc_example_callback()
 {
 	/* Log the interrupt event. */
-	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_RTC_0_VECTOR);
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_RTC_0_INT_VECTOR);
 
 	/* Invert On-board LED. */
 	led_flip(BOARD_LED_PIN);
@@ -173,7 +173,7 @@ static void test_clock_rates(void)
 	diff = spin_loop(1000, &rtc_start, &rtc_end);
 	clk_sys_set_mode(CLK_SYS_CRYSTAL_OSC, CLK_SYS_DIV_1);
 	/* Output is limited to 32 bits here. */
-	QM_PRINTF("Slo  Clk loop: %d TSC ticks; RTC diff=%d : %d - %d\n",
+	QM_PRINTF("Slow Clk loop: %d TSC ticks; RTC diff=%d : %d - %d\n",
 		  (unsigned int)(diff & 0xffffffff), rtc_end - rtc_start,
 		  rtc_end, rtc_start);
 }
@@ -216,7 +216,8 @@ void ac_example_callback(void *data, uint32_t int_status)
 	 * a constant stream of interrupts if we do not mask them. Comment the
 	 * following line if you want to get more than one interrupt.
 	 */
-	QM_SCSS_INT->int_comparators_host_mask |= BIT(WAKEUP_COMPARATOR_PIN);
+	QM_INTERRUPT_ROUTER->comparator_0_host_int_mask |=
+	    BIT(WAKEUP_COMPARATOR_PIN);
 }
 
 static void deep_sleep_test(void)
@@ -243,7 +244,7 @@ static void deep_sleep_test(void)
 	ac_cfg.callback = ac_example_callback;
 	qm_ac_set_config(&ac_cfg);
 
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
+	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 
 	/*
 	 * Comparator pin will fire an interrupt when the input voltage
@@ -304,7 +305,7 @@ int main(void)
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0, qm_rtc_isr_0);
+	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	test_clock_rates();
 

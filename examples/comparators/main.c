@@ -59,9 +59,9 @@ static void ac_example_callback(void *data, uint32_t status)
  * the interrupts after the first one has fired.
  */
 #if (QM_SENSOR)
-	QM_SCSS_INT->int_comparators_ss_mask |= BIT(0);
+	QM_INTERRUPT_ROUTER->comparator_0_ss_int_mask |= BIT(0);
 #else
-	QM_SCSS_INT->int_comparators_host_mask |= BIT(0);
+	QM_INTERRUPT_ROUTER->comparator_0_host_int_mask |= BIT(0);
 #endif
 
 	callback_invoked = true;
@@ -75,7 +75,7 @@ int main(void)
 	QM_PUTS("Starting: Analog Comparators");
 
 #if (QM_SENSOR)
-	QM_SCSS_INT->int_comparators_ss_mask &= ~BIT(0);
+	QM_INTERRUPT_ROUTER->comparator_0_ss_int_mask &= ~BIT(0);
 #endif
 
 	/* Set up pin muxing and request IRQ. */
@@ -83,7 +83,7 @@ int main(void)
 	qm_pmux_input_en(QM_PIN_ID_0, true);
 
 	/* Request IRQ and write comparator config. */
-	qm_irq_request(QM_IRQ_AC, qm_ac_isr);
+	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 
 	ac_cfg.reference = BIT(0); /* Ref internal voltage. */
 	ac_cfg.polarity = 0x0;     /* Fire if greater than ref (high level). */

@@ -31,6 +31,7 @@
 SOC = quark_se
 SOC_DIR = $(BASE_DIR)/soc/$(SOC)
 LINKER_FILE ?= $(SOC_DIR)/$(TARGET).ld
+ENABLE_RESTORE_CONTEXT ?= 1
 
 ### Flags
 ifeq ($(TARGET), x86)
@@ -41,5 +42,7 @@ ifeq ($(TARGET), sensor)
 ### FIXME: Replace with –mcpu=quarkse_em when the ARC toolchain bug is fixed.
 CFLAGS += -mcpu=arcem -mdiv-rem -mbarrel-shifter -mspfp -mdpfp
 endif
+
+CFLAGS += -DENABLE_RESTORE_CONTEXT=$(ENABLE_RESTORE_CONTEXT)
 
 CFLAGS += -I$(SOC_DIR)/include

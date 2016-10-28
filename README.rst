@@ -173,6 +173,27 @@ interrupt handling support.
 
 ``make libqmsi SOC=quark_d2000 ENABLE_EXTERNAL_ISR_HANDLING=1``
 
+Saving CPU context on sleep modes
+=================================
+
+The Quark SE has support for sleep states that power off the CPU. When a
+wake event happens, the CPU starts over from the reset vector as in a normal
+power on. It is possible to build libqmsi with support to restore the CPU
+context when coming back from sleep. To do so, build both libqmsi and the
+bootloader with 'ENABLE_RESTORE_CONTEXT=1' (see the `Bootloader README`_ for
+information on how to compile the bootloader).
+
+``make libqmsi SOC=quark_se ENABLE_RESTORE_CONTEXT=1``
+
+Make sure you have flashed the ROM firmware built with ENABLE_RESTORE_CONTEXT=1
+otherwise this feature won't work properly.
+
+Quark D2000 doesn't power off the CPU so the execution context is not lost.
+For that reason, the ENABLE_RESTORE_CONTEXT option has no effect on Quark D2000
+SoC.
+
+For more information, see `power management <doc/power_management.rst>`_.
+
 Flashing
 ========
 
@@ -281,11 +302,13 @@ Supported features
     + UART master for Lakemont
     + SPI master for Lakemont
     + I2C master for Lakemont
+    + I2C slave for Lakemont
 * Flash library.
 * Flash Protection Regions (FPR).
 * Firmware Update over UART (without authentication)
 * General Purpose Input Output (GPIO).
 * Inter-Integrated Circuit (I2C) master.
+* Inter-Integrated Circuit (I2C) slave.
 * Interrupt Controller Timer.
 * Interrupt Controllers:
 
@@ -312,12 +335,12 @@ Supported features
 * Update utilities.
 * Watchdog Timer (WDT).
 * Universal Serial Bus (USB) 1.1
+* Power management for SE C1000
 
 Unsupported Features
 ====================
 
 * Serial Peripheral Interface (SPI) slave.
-* Inter-Integrated Circuit (I2C) slave.
 * I2S
 
 .. Hyperlink targets

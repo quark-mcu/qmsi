@@ -57,6 +57,7 @@
 #define WAIT_READ_CB_PERIOD_1MS (1000)
 #define TIMEOUT_10SEC (10 * 1000000 / WAIT_READ_CB_PERIOD_1MS)
 /* Wait time (us). */
+#define WAIT_1MSEC (1000)
 #define WAIT_1SEC (1000000)
 #define WAIT_5SEC (5000000)
 
@@ -311,10 +312,17 @@ int main(void)
 	qm_uart_config_t cfg = {0};
 	const uint32_t xfer_irq_data = BANNER_IRQ_ID;
 	const uint32_t xfer_dma_data = BANNER_DMA_ID;
+	uint8_t dummy_data;
+
+	/*
+	 * Wait as the UART has just been configured by the app_entry
+	 * before reconfiguring it.
+	 */
+	clk_sys_udelay(WAIT_1MSEC);
 
 	/*
 	 * Set divisors to yield 115200bps baud rate. Sysclk is set by boot ROM
-	 * to hybrid osc in crystal mode (32MHz), peripheral clock divisor set
+	 * to hybrid osc in silicon mode (32MHz), peripheral clock divisor set
 	 * to 1.
 	 */
 	cfg.baud_divisor = QM_UART_CFG_BAUD_DL_PACK(0, 17, 6);
@@ -325,6 +333,12 @@ int main(void)
 
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_UARTA_REGISTER);
 	qm_uart_set_config(STDOUT_UART, &cfg);
+
+	/*
+	 * Changing the pin muxing as the UART is configured creates
+	 * a garbage character in the FIFO. Discard it.
+	 */
+	qm_uart_read_non_block(STDOUT_UART, &dummy_data);
 
 	QM_PUTS("Starting: UART");
 
@@ -337,9 +351,9 @@ int main(void)
 
 /* Register the UART interrupts. */
 #if (STDOUT_UART_0)
-	qm_irq_request(QM_IRQ_UART_0, qm_uart_0_isr);
+	qm_irq_request(QM_IRQ_UART_0_INT, qm_uart_0_isr);
 #elif(STDOUT_UART_1)
-	qm_irq_request(QM_IRQ_UART_1, qm_uart_1_isr);
+	qm_irq_request(QM_IRQ_UART_1_INT, qm_uart_1_isr);
 #endif
 
 	/* Used on both TX and RX. */
@@ -357,8 +371,8 @@ int main(void)
 	}
 
 	/* Register the DMA interrupts. */
-	qm_irq_request(QM_IRQ_DMA_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_ERR, qm_dma_0_isr_err);
+	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* DMA controller initialization. */
 	if (qm_dma_init(QM_DMA_0)) {

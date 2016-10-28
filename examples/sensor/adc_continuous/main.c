@@ -175,8 +175,8 @@ void setup_adc(void)
 	qm_pmux_input_en(QM_PIN_ID_11, true);
 
 	/* Request the necessary IRQs. */
-	qm_ss_irq_request(QM_SS_IRQ_ADC_IRQ, adc_0_continuous_isr);
-	qm_ss_irq_request(QM_SS_IRQ_ADC_ERR, qm_ss_adc_0_err_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_INT, adc_0_continuous_isr);
+	qm_ss_irq_request(QM_SS_IRQ_ADC_0_ERROR_INT, qm_ss_adc_0_error_isr);
 
 	/* Set the mode and calibrate. */
 	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_NORM_CAL);

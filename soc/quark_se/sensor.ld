@@ -40,12 +40,17 @@ MEMORY
 	stack (rw)	: ORIGIN = 0xA8009C00, LENGTH = 1K
 	/* Place IDT at the bottom of LMT SRAM, 68 gate wide */
 	lmt_esram_idt (rw): ORIGIN = 0xA800A000, LENGTH = 0x220
+	/* Shared RAM */
+	esram_restore_info (rw) : ORIGIN = 0xA8013FFC, LENGTH = 0x4
 }
 
 /* IDT definition */
 __idt_start = ORIGIN(lmt_esram_idt);
 __idt_end = __idt_start + LENGTH(lmt_esram_idt);
 __ivt_vect_table = ORIGIN(vect_table);
+
+/* Shared RAM definition */
+__x86_restore_info = ORIGIN(esram_restore_info);
 
 /* Stack definition */
 __stack_start = ORIGIN(stack) + LENGTH(stack);
