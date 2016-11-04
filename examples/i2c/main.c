@@ -349,7 +349,7 @@ int main(void)
 
 	QM_PUTS("Starting: I2C");
 
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_isr);
+	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);
@@ -388,6 +388,12 @@ int main(void)
 	eeprom_compare_page(eeprom_irq_write_data, eeprom_read_buf);
 
 	/* DMA example. */
+
+	/* Verify irq callback was fired before initiating a new request */
+	while (!i2c_0_irq_complete)
+		;
+
+	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_dma_isr);
 	i2c_dma_setup();
 	i2c_dma_write_example();
 	i2c_dma_combined_transaction_example();
