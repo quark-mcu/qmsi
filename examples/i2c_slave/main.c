@@ -128,7 +128,8 @@ static void process_address(uint32_t len)
 	irq_combined_xfer.tx = eeprom_pages[addressed_page];
 	irq_combined_xfer.rx = eeprom_pages[addressed_page];
 
-	irq_combined_xfer.rx_len = EEPROM_PAGE_SIZE;
+	irq_combined_xfer.rx_len =
+	    EEPROM_PAGE_SIZE * (EEPROM_NB_PAGES - addressed_page);
 	/* Notify the driver that we have updated some data.  */
 	qm_i2c_slave_irq_transfer_update(QM_I2C_0, &irq_combined_xfer);
 }
@@ -202,7 +203,7 @@ int main(void)
 
 	QM_PUTS("Starting: I2C-slave");
 
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_isr);
+	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);

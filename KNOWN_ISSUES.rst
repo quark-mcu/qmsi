@@ -1,7 +1,7 @@
 Known Issues and Workarounds
 ****************************
 
-Affected version: QMSI 1.3.0.
+Affected version: QMSI 1.3.1.
 
 =========== ====================================================================
 Issue       UART 0 is reserved on SE C1000 development platform
@@ -13,30 +13,10 @@ Workaround  Use UART 1 instead.
 =========== ====================================================================
 
 =========== ====================================================================
-Issue       D2000 hangs if the UART prints during soc_deep_sleep before the
-            system has fully restored to the active state.
------------ --------------------------------------------------------------------
-Implication If the user callback attempts to send data over the UART during a
-            soc_deep_sleep callback when the system is still transitioning to
-            the active state, the system will hang on wake.
------------ --------------------------------------------------------------------
-Workaround  Avoid printing over the UART during user callbacks until after the
-            SoC has fully resumed operations in the active state.
-=========== ====================================================================
-
-=========== ====================================================================
 Issue       I2C transfer speeds are sub-optimal.
 ----------- --------------------------------------------------------------------
 Implication I2C transfer speeds are not as fast as they could be.
 ----------- --------------------------------------------------------------------
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       I2C driver has hard dependency on DMA code.
------------ --------------------------------------------------------------------
-Implication I2C driver includes DMA code even if functionality is unused.
------------ --------------------------------------------------------------------
-Workaround
 =========== ====================================================================
 
 =========== ====================================================================
@@ -79,18 +59,6 @@ Workaround  Do not enter low power modes on SE C1000 when performing I2C slave
 =========== ====================================================================
 
 =========== ====================================================================
-Issue       After restoring context on SS ADC on SE C1000, not all settings are
-            restored.
------------ --------------------------------------------------------------------
-Implication On SE C1000, after a restore cycle, the SS ADC settings are not
-            restored correctly, this includes any calibration and mode settings.
-	    There is also a spurious interrupt if interrupts were enabled.
------------ --------------------------------------------------------------------
-Workaround  After resuming, re-calibrate and set mode of SS ADC. Disregard
-            spurious interrupt.
-=========== ====================================================================
-
-=========== ====================================================================
 Issue       On SE C1000, if mass erase is performed on the ARC flash partition,
             garbled output can be observed on the UART.
 ----------- --------------------------------------------------------------------
@@ -121,17 +89,6 @@ Workaround  Use another comparator instead.
 =========== ====================================================================
 
 =========== ====================================================================
-Issue       SE C1000 SS SPI does not restore clk polarity after save/restore
-            cycle.
------------ --------------------------------------------------------------------
-Implication On SE C1000, after performing a sleep restore cycle, the SS SPI clk
-            polarity is not restored to what it was prior to entering sleep
-	    modes.
------------ --------------------------------------------------------------------
-Workaround  Re-set clk polarity after restoring context on SE C1000.
-=========== ====================================================================
-
-=========== ====================================================================
 Issue       SPI master transfer speeds are sub-optimal when using save/restore
             builds on SE C1000.
 ----------- --------------------------------------------------------------------
@@ -157,18 +114,9 @@ Issue       SE C1000 DMA freezes if performed after a save/restore cycle.
 ----------- --------------------------------------------------------------------
 Implication When operating in debug mode, after performing a sleep/restore cycle
             if DMA is then configured, the system is flooded with block
-	    interrupts and stalls, rendering it unusable.
+            interrupts and stalls, rendering it unusable.
 ----------- --------------------------------------------------------------------
 Workaround  Disable save/restore context or run in release mode.
-=========== ====================================================================
-
-=========== ====================================================================
-Issue       SE C1000 ARC performance is reduced after sleep.
------------ --------------------------------------------------------------------
-Implication After performing a sleep/restore cycle, the ARC performance drops.
------------ --------------------------------------------------------------------
-Workaround  Enable the instruction cache on the ARC core after sleep.
-            Refer to sys/sensor/init.c for the exact sequence.
 =========== ====================================================================
 
 =========== ====================================================================
@@ -178,4 +126,15 @@ Implication AON periodic timer may fail to have ready bit set if example is
             re-run multiple times on SE C1000.
 ----------- --------------------------------------------------------------------
 Workaround  Perform cold reset in-between runs.
+=========== ====================================================================
+
+=========== ====================================================================
+Issue       I2C master terminate TX IRQ fails in release builds.
+----------- --------------------------------------------------------------------
+Implication For D2000, attempting to terminate an IRQ based TX transfer when
+            operating at FAST_PLUS mode will result in failure.
+            For SE C1000 sensor, attempting to abort a multi master IRQ based TX
+            transfer operating at STANDARD mode will result in failure.
+----------- --------------------------------------------------------------------
+Workaround  Operate I2C at different speeds or run in debug builds.
 =========== ====================================================================
