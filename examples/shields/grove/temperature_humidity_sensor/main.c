@@ -94,7 +94,7 @@ static int bus_i2c_init(void)
 	QM_CHECK((true == IS_SUPPORTED_SoC()), -EINVAL);
 
 #if (QUARK_SE)
-	qm_irq_request(QM_IRQ_I2C_1_INT, qm_i2c_1_isr);
+	qm_irq_request(QM_IRQ_I2C_1_INT, qm_i2c_1_irq_isr);
 
 	/* Enable I2C 1. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M1_REGISTER);
@@ -103,7 +103,7 @@ static int bus_i2c_init(void)
 	qm_pmux_select(QM_PIN_ID_22, QM_PMUX_FN_0);
 	qm_pmux_select(QM_PIN_ID_23, QM_PMUX_FN_0);
 #elif(QUARK_D2000)
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_isr);
+	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);
