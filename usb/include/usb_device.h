@@ -82,7 +82,8 @@ typedef struct {
 	 * enough to store the largest payload associated with the largest
 	 * class command set. It may be used for both USB IN or OUT transfers.
 	 */
-	uint8_t *data;
+	uint8_t *data; /**< Pointer to data buffer. */
+	uint16_t data_size;
 } usb_interface_config_t;
 
 /**

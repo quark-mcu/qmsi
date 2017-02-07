@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,8 +43,10 @@
 #include "clk.h"
 #include "qm_adc.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 #define NUM_CHANNELS (2)	   /* Number of channels to sample from. */
 #define NUM_SAMPLES_POLLED (10)    /* Number of samples in polled mode. */
@@ -63,6 +65,14 @@ static void callback(void *data, int error, qm_adc_status_t status,
 	}
 }
 
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(QM_PIN_ID_8, QM_PIN_8_FN_AIN_8);
+	qm_pmux_select(QM_PIN_ID_9, QM_PIN_9_FN_AIN_9);
+	qm_pmux_input_en(QM_PIN_ID_8, true);
+	qm_pmux_input_en(QM_PIN_ID_9, true);
+}
+
 int main(void)
 {
 	int i;
@@ -79,11 +89,7 @@ int main(void)
 			  CLK_PERIPH_ADC_REGISTER);
 	clk_adc_set_div(100); /* ADC clock is 320KHz @ 32MHz. */
 
-	/* Set up pinmux. */
-	qm_pmux_select(QM_PIN_ID_8, QM_PMUX_FN_1);
-	qm_pmux_select(QM_PIN_ID_9, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_8, true);
-	qm_pmux_input_en(QM_PIN_ID_9, true);
+	pin_mux_setup();
 
 	/* Set the mode and calibrate. */
 	qm_adc_set_mode(QM_ADC_0, QM_ADC_MODE_NORM_CAL);
@@ -117,7 +123,8 @@ int main(void)
 	/* ADC interrupt mode example. */
 	QM_PUTS("\nADC interrupt mode");
 
-	qm_irq_request(QM_IRQ_ADC_0_CAL_INT, qm_adc_0_cal_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_ADC_0_CAL_INT);
+	QM_IRQ_REQUEST(QM_IRQ_ADC_0_CAL_INT, qm_adc_0_cal_isr);
 
 	/* Set up xfer. */
 	xfer.ch = channels;

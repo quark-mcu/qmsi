@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -752,6 +752,23 @@ int qm_uart_restore_context(const qm_uart_t uart,
 	regs->iir_fcr =
 	    (QM_UART_FCR_FIFOE | QM_UART_FCR_RFIFOR | QM_UART_FCR_XFIFOR |
 	     QM_UART_FCR_DEFAULT_TX_RX_THRESHOLD);
+
+	return 0;
+}
+#else
+int qm_uart_save_context(const qm_uart_t uart, qm_uart_context_t *const ctx)
+{
+	(void)uart;
+	(void)ctx;
+
+	return 0;
+}
+
+int qm_uart_restore_context(const qm_uart_t uart,
+			    const qm_uart_context_t *const ctx)
+{
+	(void)uart;
+	(void)ctx;
 
 	return 0;
 }

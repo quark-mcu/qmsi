@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -42,9 +42,11 @@
 #include "clk.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_i2c.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 #define EEPROM_PAGE_SIZE_BYTES (64)
 #define EEPROM_ADDR_SIZE_BYTES (2)
@@ -251,9 +253,12 @@ void i2c_irq_combined_transaction_example()
 void i2c_dma_setup()
 {
 	/* Request interrupts for the DMA controller. */
-	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
-	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_0);
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_1);
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_ERROR_INT);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* Init DMA controller. */
 	if (qm_dma_init(QM_DMA_0)) {
@@ -343,24 +348,33 @@ void i2c_dma_combined_transaction_example()
 	}
 }
 
+static void pin_mux_setup(void)
+{
+
+#if (QUARK_D2000)
+	qm_pmux_select(QM_PIN_ID_6, QM_PIN_6_FN_I2C0_SCL);
+	qm_pmux_select(QM_PIN_ID_7, QM_PIN_7_FN_I2C0_SDA);
+#elif(QUARK_SE)
+	qm_pmux_select(QM_PIN_ID_20, QM_PIN_20_FN_I2C0_SCL);
+	qm_pmux_select(QM_PIN_ID_21, QM_PIN_21_FN_I2C0_SDA);
+#else
+#error("Unsupported processor.")
+#endif
+}
+
 int main(void)
 {
 	qm_i2c_config_t cfg;
 
 	QM_PUTS("Starting: I2C");
 
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_I2C_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);
 
-#if (QUARK_D2000)
-	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_2);
-	qm_pmux_select(QM_PIN_ID_7, QM_PMUX_FN_2);
-#elif(QUARK_SE)
-	qm_pmux_select(QM_PIN_ID_20, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_21, QM_PMUX_FN_0);
-#endif
+	pin_mux_setup();
 
 	/* Configure I2C. */
 	cfg.address_mode = QM_I2C_7_BIT;
@@ -393,7 +407,7 @@ int main(void)
 	while (!i2c_0_irq_complete)
 		;
 
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_dma_isr);
+	QM_IRQ_REQUEST(QM_IRQ_I2C_0_INT, qm_i2c_0_dma_isr);
 	i2c_dma_setup();
 	i2c_dma_write_example();
 	i2c_dma_combined_transaction_example();
