@@ -58,7 +58,9 @@
 #include "power_states.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_rtc.h"
 #include "qm_uart.h"
+#include "soc_watch.h"
 
 #if (QM_SENSOR)
 #include "ss_power_states.h"
@@ -69,6 +71,7 @@
 static void app_sleep()
 {
 	qm_uart_context_t uart_ctx;
+	qm_rtc_context_t rtc_ctx;
 	qm_irq_context_t irq_ctx;
 
 	setup_rtc_alarm();
@@ -76,32 +79,26 @@ static void app_sleep()
 	QM_PUTS("Go to sleep.");
 
 	qm_uart_save_context(STDOUT_UART, &uart_ctx);
+	qm_rtc_save_context(QM_RTC_0, &rtc_ctx);
 	qm_irq_save_context(&irq_ctx);
 
 #if (QM_SENSOR)
 	/* Go to sleep, RTC will wake me up. */
-	ss_power_soc_sleep_restore();
+	qm_ss_power_soc_sleep_restore();
 #else
 	/* Go to sleep, RTC will wake me up. */
-	power_soc_sleep_restore();
+	qm_power_soc_sleep_restore();
 #endif
 
-	/*
-	 * Interrupts are not cleared when waking up from sleep.
-	 * The application needs to check which wake event triggered
-	 * and react to it appropriately.
-	 * In our case, we simply clear the interrupt.
-	 */
-	QM_RTC[QM_RTC_0].rtc_eoi;
-	QM_RTC[QM_RTC_0].rtc_ccr &= ~QM_RTC_CCR_INTERRUPT_ENABLE;
-
 	qm_irq_restore_context(&irq_ctx);
+	qm_rtc_restore_context(QM_RTC_0, &rtc_ctx);
 	qm_uart_restore_context(STDOUT_UART, &uart_ctx);
 }
 
 static void app_deep_sleep()
 {
 	qm_uart_context_t uart_ctx;
+	qm_rtc_context_t rtc_ctx;
 	qm_irq_context_t irq_ctx;
 
 	setup_aon_comparator();
@@ -109,26 +106,19 @@ static void app_deep_sleep()
 	QM_PUTS("Go to deep sleep. Trigger comparator to wake up.");
 
 	qm_uart_save_context(STDOUT_UART, &uart_ctx);
+	qm_rtc_save_context(QM_RTC_0, &rtc_ctx);
 	qm_irq_save_context(&irq_ctx);
 
 #if (QM_SENSOR)
 	/* Go to deep sleep, Comparator will wake me up. */
-	ss_power_soc_deep_sleep_restore();
+	qm_ss_power_soc_deep_sleep_restore();
 #else
 	/* Go to deep sleep, Comparator will wake me up. */
-	power_soc_deep_sleep_restore();
+	qm_power_soc_deep_sleep_restore();
 #endif
 
-	/*
-	 * Interrupts are not cleared when waking up from sleep.
-	 * The application needs to check which wake event triggered
-	 * and react to it appropriately.
-	 * In our case, we simply clear the interrupt.
-	 */
-	QM_SCSS_CMP->cmp_pwr = 0;
-	QM_SCSS_CMP->cmp_stat_clr = QM_AC_COMPARATORS_MASK;
-
 	qm_irq_restore_context(&irq_ctx);
+	qm_rtc_restore_context(QM_RTC_0, &rtc_ctx);
 	qm_uart_restore_context(STDOUT_UART, &uart_ctx);
 }
 
@@ -139,11 +129,20 @@ void power_soc_restore(void)
 	QM_PUTS("Press PB0 to go to sleep.");
 	wait_user_ready();
 	app_sleep();
+	/* soc_watch instrumentation to log wakeup. */
+	/* soc_sleep entry is logged in qmsi driver. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_RTC_0_INT_VECTOR);
+	SOC_WATCH_TRIGGER_FLUSH();
 	QM_PUTS("SoC states example back from sleep.");
 
 	QM_PUTS("Set comparator pin to Ground and press PB0 when ready.");
 	wait_user_ready();
 	app_deep_sleep();
+	/* soc_watch instrumentation to log wakeup. */
+	/* soc_deep_sleep entry is logged in qmsi driver. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT,
+			    QM_IRQ_COMPARATOR_0_INT_VECTOR);
+	SOC_WATCH_TRIGGER_FLUSH();
 	QM_PUTS("SoC states example back from deep sleep.");
 
 	QM_PUTS("Finished: Power SoC");

@@ -36,7 +36,6 @@ TARGET ?= $(DEFAULT_TARGET)
 TARGETS_quark_d2000 = x86
 TARGETS_quark_se = x86 \
                    sensor
-
 ifeq ($(filter $(SOC),$(SUPPORTED_SOCS)),)
 $(error SOC=$(SOC) is not supported. Run 'make help' for help)
 endif
@@ -57,7 +56,7 @@ ifeq ($(TARGET), sensor)
 HEADERS += $(wildcard $(BASE_DIR)/drivers/sensor/include/*.h)
 endif
 
-ifeq ($(SOC), quark_se)
+ifneq ($(SOC), quark_d2000)
 HEADERS += $(wildcard $(BASE_DIR)/drivers/usb/include/*.h)
 endif
 

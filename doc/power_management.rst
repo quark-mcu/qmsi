@@ -87,8 +87,8 @@ API Functions
 
 The header provides functions to:
 
-* Enter CPU states through power_cpu_* functions or power_ss_cpu_* functions
-  (when sensor support is available).
+* Enter CPU states through qm_power_cpu_* functions or qm_power_ss_cpu_*
+  functions (when sensor support is available).
 * Save and Restore CPU, IRQ and peripherals context as supported by the QMSI
   drivers. See the `Saving and Restoring context`_ section for more details.
 
@@ -136,7 +136,7 @@ to restore the x86 core (without restoring peripherals):
                 register_my_wake_source();
 
                 /* Save, enter sleep and restore. */
-                power_soc_sleep_restore();
+                qm_power_soc_sleep_restore();
 
                 return 0;
         }
@@ -189,7 +189,7 @@ order to restore the ARC core without peripherals:
                 register_my_wake_source();
 
                 /* Save, enter sleep and restore. */
-                ss_power_soc_sleep_restore();
+                qm_ss_power_soc_sleep_restore();
 
                 return 0;
         }
@@ -207,8 +207,8 @@ only entered when both cores are ready.
 
 A set of functions are available to enable synchronization:
 
-* power_sleep_wait(): Prepare x86 for sleep, sleep should be triggered from ARC.
-* ss_power_sleep_wait(): Prepare ARC for sleep, sleep should be triggered
+* qm_power_sleep_wait(): Prepare x86 for sleep, sleep should be triggered from ARC.
+* qm_ss_power_sleep_wait(): Prepare ARC for sleep, sleep should be triggered
   from x86.
 
 API resources

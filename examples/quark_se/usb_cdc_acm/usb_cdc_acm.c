@@ -405,7 +405,8 @@ static usb_device_config_t cdc_acm_config = {
     .status_callback = cdc_acm_dev_status_cb,
     .interface = {.class_handler = cdc_acm_class_handle_req,
 		  .custom_handler = NULL,
-		  .data = NULL},
+		  .data = NULL,
+		  .data_size = 0},
     .num_endpoints = CDC_ITF1_NUM_EP + CDC_ITF2_NUM_EP,
     .endpoints = cdc_acm_eps};
 
@@ -415,6 +416,7 @@ int cdc_acm_init(void)
 	int ret;
 
 	cdc_acm_config.interface.data = dev_data->interface_data;
+	cdc_acm_config.interface.data_size = sizeof(dev_data->interface_data);
 
 	/* Initialize the USB driver with the right configuration. */
 	ret = usb_enable(&cdc_acm_config);

@@ -34,7 +34,7 @@
  * LPSS will be enabled by a state transition to C2/C2LP from the x86 core
  * after this application has executed on ARC.
  *
- * In order to enter LPSS, this application can run in conjonction with its
+ * In order to enter LPSS, this application can run in conjunction with its
  * x86 counterpart located in examples/quark_se/configure_lpss/.
  *
  * Any application on x86 which requires LPSS can use this example.
@@ -43,6 +43,7 @@
  */
 
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "ss_power_states.h"
 
@@ -52,6 +53,28 @@
 /* Empty ISR, the real handling will be performed by the x86 core. */
 static QM_ISR_DECLARE(dummy_isr)
 {
+}
+
+static void switch_rtc_to_level(void)
+{
+	/* The sensor cannot be woken up with an edge triggered
+	 * interrupt from the RTC and the AON Counter.
+	 * Switch to Level triggered interrupts and restore
+	 * the setting when waking up.
+	 */
+	__builtin_arc_sr(QM_IRQ_RTC_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	__builtin_arc_sr(QM_SS_IRQ_LEVEL_SENSITIVE, QM_SS_AUX_IRQ_TRIGGER);
+}
+
+static void switch_aonpt_to_level(void)
+{
+	/* The sensor cannot be woken up with an edge triggered
+	 * interrupt from the RTC and the AON Counter.
+	 * Switch to Level triggered interrupts and restore
+	 * the setting when waking up.
+	 */
+	__builtin_arc_sr(QM_IRQ_AONPT_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	__builtin_arc_sr(QM_SS_IRQ_LEVEL_SENSITIVE, QM_SS_AUX_IRQ_TRIGGER);
 }
 
 int main(void)
@@ -65,24 +88,35 @@ int main(void)
 	 *
 	 * All interrupts below will wake up the Sensor Subsystem.
 	 */
-	qm_irq_request(QM_IRQ_RTC_0_INT, dummy_isr);
-	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, dummy_isr);
-	qm_irq_request(QM_IRQ_AONPT_0_INT, dummy_isr);
-	qm_irq_request(QM_IRQ_AON_GPIO_0_INT, dummy_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, dummy_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_COMPARATOR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_COMPARATOR_0_INT, dummy_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_AONPT_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_AONPT_0_INT, dummy_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_AON_GPIO_0_INT, dummy_isr);
 
 	/* Unmask comparator interrupts for the Sensor Subsystenm */
 	QM_INTERRUPT_ROUTER->comparator_0_ss_halt_int_mask &=
 	    ~QM_AC_COMPARATORS_MASK;
 
+	switch_rtc_to_level();
+	switch_aonpt_to_level();
+
 	/*
 	 * Enable LPSS by the Sensor Subsystem.
 	 * This will clock gate sensor peripherals.
 	 */
-	ss_power_soc_lpss_enable();
+	qm_ss_power_soc_lpss_enable();
 
 	/* Loop on SS2 to be ready for LPSS even after wake-up. */
 	while (1) {
-		ss_power_cpu_ss2();
+		qm_ss_power_cpu_ss2();
 	}
 
 	return 0;

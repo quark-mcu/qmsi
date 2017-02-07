@@ -54,7 +54,9 @@
 #include "clk.h"
 #include "qm_adc.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "ring_buffer.h"
 
 #define QM_ADC_CMD_STOP_CONT (5)
@@ -117,6 +119,14 @@ void transfer_cb(void *data, int error, qm_adc_status_t status,
 	}
 }
 
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(QM_PIN_ID_8, QM_PIN_8_FN_AIN_8);
+	qm_pmux_select(QM_PIN_ID_9, QM_PIN_9_FN_AIN_9);
+	qm_pmux_input_en(QM_PIN_ID_8, true);
+	qm_pmux_input_en(QM_PIN_ID_9, true);
+}
+
 int main(void)
 {
 	uint16_t val;
@@ -134,10 +144,7 @@ int main(void)
 	clk_adc_set_div(100); /* ADC clock is 320KHz @ 32MHz. */
 
 	/* Set up pinmux. */
-	qm_pmux_select(QM_PIN_ID_8, QM_PMUX_FN_1);
-	qm_pmux_select(QM_PIN_ID_9, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_8, true);
-	qm_pmux_input_en(QM_PIN_ID_9, true);
+	pin_mux_setup();
 
 	/* Set the mode and calibrate. */
 	qm_adc_set_mode(QM_ADC_0, QM_ADC_MODE_NORM_CAL);
@@ -148,7 +155,8 @@ int main(void)
 	cfg.resolution = QM_ADC_RES_12_BITS;
 	qm_adc_set_config(QM_ADC_0, &cfg);
 
-	qm_irq_request(QM_IRQ_ADC_0_CAL_INT, adc_0_continuous_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_ADC_0_CAL_INT);
+	QM_IRQ_REQUEST(QM_IRQ_ADC_0_CAL_INT, adc_0_continuous_isr);
 
 	/* Set up transfer. */
 	xfer.ch = channels;

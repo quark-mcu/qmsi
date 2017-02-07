@@ -45,6 +45,7 @@
 #include "clk.h"
 #include "qm_common.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_sensor_regs.h"
 #include "qm_soc_regs.h"
 #include "qm_ss_gpio.h"
@@ -66,6 +67,17 @@ static void gpio_example_callback(void *data, uint32_t status)
 	callback_status = status;
 }
 
+static void pin_mux_setup(void)
+{
+	/* Set GPIO mux mode. */
+	qm_pmux_pullup_en(QM_PIN_ID_11, true);
+	qm_pmux_select(QM_PIN_ID_11, QM_PIN_11_FN_GPIO_SS_3);
+	qm_pmux_select(QM_PIN_ID_10, QM_PIN_10_FN_GPIO_SS_2);
+
+	/* Enable input on PIN_INTR. */
+	qm_pmux_input_en(QM_PIN_ID_11, true);
+}
+
 int main(void)
 {
 	qm_ss_gpio_state_t state;
@@ -73,13 +85,7 @@ int main(void)
 
 	QM_PUTS("Starting: SS GPIO");
 
-	/* Set GPIO mux mode. */
-	qm_pmux_pullup_en(QM_PIN_ID_11, true);
-	qm_pmux_select(QM_PIN_ID_11, QM_PMUX_FN_0);
-	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_0);
-
-	/* Enable input on PIN_INTR. */
-	qm_pmux_input_en(QM_PIN_ID_11, true);
+	pin_mux_setup();
 
 	/* Request IRQ and write SS GPIO port config. */
 	conf.direction = BIT(PIN_OUT);      /* Set PIN_OUT to output. */
@@ -93,6 +99,7 @@ int main(void)
 	/* Enable clock. */
 	ss_clk_gpio_enable(QM_SS_GPIO_0);
 
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_gpio_0_int_mask);
 	qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, qm_ss_gpio_0_isr);
 
 	qm_ss_gpio_set_config(QM_SS_GPIO_0, &conf);

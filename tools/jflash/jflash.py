@@ -40,16 +40,19 @@ import os
 import sys
 import argparse
 import subprocess
-import collections
+import signal
+from collections import namedtuple
 
-BoardConfig = collections.namedtuple('BoardConfig',
-                                     'soc addr_rom addr_rom_2nd addr_x86 addr_arc gdb_port')
+BoardConfig = namedtuple('BoardConfig',
+                         'soc addr_rom addr_rom_2nd \
+                          addr_x86 addr_arc trg gdb_port')
 BOARD_CFG = {'quarkse_dev':
              BoardConfig(soc='quark_se',
                          addr_rom='0xffffe000',
                          addr_rom_2nd='0x4005b000',
                          addr_x86='0x40030000',
                          addr_arc='0x40000000',
+                         trg='quark_se.quark',
                          gdb_port='3333'),
              'd2000_dev':
              BoardConfig(soc='quark_d2000',
@@ -57,6 +60,7 @@ BOARD_CFG = {'quarkse_dev':
                          addr_rom_2nd=None,
                          addr_x86='0x00180000',
                          addr_arc=None,
+                         trg='lmt.cpu',
                          gdb_port='3333')}
 
 def load_board_cfg(board, addr):
@@ -65,12 +69,17 @@ def load_board_cfg(board, addr):
     # the parser has already validated it.
     cfg = BOARD_CFG[board]
 
+    if addr == 'addr_arc':
+        trg = 'quark_se.arc-em'
+    else:
+        trg = cfg.trg
+
     addr = getattr(cfg, addr)
     if addr is None:
         print('Incompatible input options.')
         exit(1)
 
-    return (cfg.soc, addr, cfg.gdb_port)
+    return (cfg.soc, addr, trg, cfg.gdb_port)
 
 def get_open_ocd_paths(tool_chain_path):
     """ Look for OpenOCD installation path. """
@@ -100,7 +109,9 @@ def get_open_ocd_paths(tool_chain_path):
 
     ocd_scripts_path = os.path.join(tool_chain_path,
                                     'tools', 'debugger', 'openocd', 'scripts')
-    helpers_path = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])),
+    # Resolve any symbolic link
+    jflash_path = os.path.realpath(sys.argv[0])
+    helpers_path = os.path.join(os.path.dirname(jflash_path),
                                 'helpers')
     # Path validation.
     ocd_scripts_path = is_valid_path(ocd_scripts_path)
@@ -112,11 +123,16 @@ def run_open_ocd(board_cfg, ocd_env_path, input_file, debug):
     """ Run commands to flash the target or start a
         debug session. """
     # Extract board information.
-    (soc, flash_addr, gdb_port) = board_cfg
+    (soc, flash_addr, target, gdb_port) = board_cfg
     # Extract path information.
     (bin_path, scripts_path, helpers_path) = ocd_env_path
 
     if debug:
+        # Ignore SIGINT so that gdb can receive a signal
+        # interruption without the whole process to be
+        # terminated.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+
         with open(os.devnull, 'w') as dev_null:
             try:
                 cmd = [bin_path, '-s', scripts_path,
@@ -125,7 +141,7 @@ def run_open_ocd(board_cfg, ocd_env_path, input_file, debug):
                 subprocess.Popen(cmd, stdout=dev_null, stderr=dev_null)
                 cmd = ['gdb', '-ex', 'set architecture i386:intel',
                        '-ex', 'target remote :{}'.format(gdb_port),
-                       '-ex', 'monitor targets lmt.cpu',
+                       '-ex', 'monitor targets {}'.format(target),
                        '-ex', 'file {}'.format(input_file)]
                 subprocess.call(cmd)
             except subprocess.CalledProcessError:
@@ -175,7 +191,8 @@ def main():
                        help='Flash ROM (Bootloader - 1st stage).')
     group.add_argument('-u', '--rom-2nd', action='store_const',
                        dest='addr', const='addr_rom_2nd',
-                       help='Flash 2nd Stage ROM (Bootloader - 2nd stage, Quark SE only).')
+                       help='Flash 2nd Stage ROM ' \
+                            '(Bootloader - 2nd stage, Quark SE only).')
     parser.add_argument('board', metavar='BOARD',
                         choices=['d2000_dev', 'quarkse_dev'],
                         help='Board name (d2000_dev or quarkse_dev).')

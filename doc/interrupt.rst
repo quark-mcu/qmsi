@@ -59,8 +59,8 @@ The header provides functions to:
 * Map an IRQ to an interrupt vector.
 * Lock / unlock interrupts based on previously saved IF flag state
 
-Sample Flow
-===========
+Sample Flows
+============
 
 This example shows how to register a custom RTC IRQ handler using the QMSI
 interrupt API.
@@ -78,11 +78,47 @@ interrupt API.
         int main(void)
         {
                 /*
+                 * Configure the SoC Interrupt Router to route the interrupt to
+                 * the core which is running this code.
+                 */
+                QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+
+                /*
                  * Request IRQ for the RTC.
                  * This installs the custom_rtc_isr ISR to the RTC vector and
-                 * steers the interrupt to the core which is running this code.
+                 * unmasks the interrupt in the core which is running this code.
                  */
-                qm_irq_request(QM_IRQ_RTC_0_INT, my_rtc_isr);
+                QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, my_rtc_isr);
+
+                return 0;
+        }
+
+This example shows how to register a custom Sensor GPIO IRQ handler using the
+QMSI interrupt API. Note there are some differences for sensor sub-system
+peripherals since they can only be used from the sensor sub-system.
+
+::
+
+        static QM_ISR_DECLARE(my_sensor_gpio_isr)
+        {
+                /* Handle interrupt here */
+        }
+
+        int main(void)
+        {
+                /*
+                 * Configure the SoC Interrupt Router to route the interrupt to
+                 * the sensor sub-system.
+                 */
+                QM_IR_UNMASK_SS_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_gpio_0_int_mask);
+
+                /*
+                 * Request IRQ for the Sensor GPIO.
+                 * This installs the custom_sensor_goio_isr ISR to the Sensor GPIO
+                 * vector in the interrupt vector table and unmasks the interrupt
+                 * in the sensor sub-system.
+                 */
+                qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, my_sensor_gpio_isr);
 
                 return 0;
         }

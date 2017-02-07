@@ -38,8 +38,10 @@
 #include "qm_comparator.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_usb.h"
 #include "usb_dfu.h"
 #include <string.h>
@@ -102,24 +104,32 @@ static void enable_usb_vbus(void)
 	qm_gpio_set_pin(USB_VBUS_GPIO_PORT, USB_VBUS_GPIO_PIN);
 }
 
+static void pin_mux_setup(void)
+{
+	/* Pinmux setup for Comparator 7. */
+	qm_pmux_select(QM_PIN_ID_7, QM_PIN_7_FN_AIN_7);
+	qm_pmux_input_en(QM_PIN_ID_7, true);
+}
+
 int main(void)
 {
 	QM_PUTS("Starting: DFU Test Application");
 
 	/* Setup USB_DETECT comparator pin. */
-	ac_cfg.int_en = BIT(USB_DETECT_CMP);     /* AIN7 enable */
+	ac_cfg.cmp_en = BIT(USB_DETECT_CMP);     /* AIN7 enable */
 	ac_cfg.reference = BIT(USB_DETECT_CMP);  /* Ref internal voltage */
 	ac_cfg.polarity &= ~BIT(USB_DETECT_CMP); /* Fire if > ref. */
 	ac_cfg.power = BIT(USB_DETECT_CMP);      /* Normal operation mode */
 	ac_cfg.callback = usb_detected_cb;
 
-	/* Pinmux setup for Comparator 7. */
-	qm_pmux_select(QM_PIN_ID_7, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_7, true);
+	pin_mux_setup();
 
 	/* Setup ISRs for USB and Comparator. */
-	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
-	qm_irq_request(QM_IRQ_USB_0_INT, qm_usb_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_COMPARATOR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_USB_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_USB_0_INT, qm_usb_0_isr);
 
 	/* Apply comparator config. */
 	qm_ac_set_config(&ac_cfg);

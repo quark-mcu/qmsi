@@ -28,7 +28,7 @@
  */
 
 /*
- * Tinycript Crypto
+ * Tinycrypt Crypto
  *
  * This example describes how to use AES CTR crypto and HMAC SHA256 digest
  * calculation.

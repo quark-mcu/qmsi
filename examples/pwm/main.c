@@ -37,6 +37,7 @@
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
 #include "qm_pwm.h"
@@ -130,8 +131,10 @@ int main(void)
 
 	/* Set the configuration of the PWM. */
 	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &cfg);
+
 	/* Register the ISR with the SoC. */
-	qm_irq_request(QM_IRQ_PWM_0_INT, qm_pwm_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_PWM_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_PWM_0_INT, qm_pwm_0_isr_0);
 
 	qm_pmux_select(QM_PWM_CH_1_PIN, QM_PWM_CH_1_FN_PWM);
 	/* Start PWM0 channel 1. */
@@ -139,6 +142,7 @@ int main(void)
 
 	while (!complete)
 		;
+	complete = false;
 
 	QM_PUTS("PWM channel 1 fired.");
 

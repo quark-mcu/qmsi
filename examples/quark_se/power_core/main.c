@@ -43,6 +43,7 @@
 #include "power_states.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pic_timer.h"
 #include "qm_rtc.h"
@@ -70,12 +71,12 @@ int main(void)
 	QM_PUTS("Go to C1.");
 
 	/* Halt the CPU, PIC TIMER INT will wake me up. */
-	power_cpu_c1();
+	qm_power_cpu_c1();
 
 	QM_PUTS("Wake up from C1.\nGo to C2.");
 
 	/* Go to C2, PIC TIMER INT will wake me up. */
-	power_cpu_c2();
+	qm_power_cpu_c2();
 
 	QM_PUTS("Wake up from C2.");
 
@@ -98,12 +99,13 @@ int main(void)
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	QM_PUTS("Go to C2LP.");
 
 	/* Go to C2LP, RTC will wake me up. */
-	power_cpu_c2lp();
+	qm_power_cpu_c2lp();
 
 	QM_PUTS("Wake up from C2LP.");
 

@@ -44,6 +44,7 @@
  */
 
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_wdt.h"
 
@@ -80,7 +81,9 @@ int main(void)
 	cfg.callback_data = NULL;
 
 	qm_wdt_set_config(QM_WDT_0, &cfg);
-	qm_irq_request(QM_IRQ_WDT_0_INT, qm_wdt_0_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_WDT_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_WDT_0_INT, qm_wdt_0_isr);
 
 	/* Start the WDT. */
 	qm_wdt_start(QM_WDT_0);
