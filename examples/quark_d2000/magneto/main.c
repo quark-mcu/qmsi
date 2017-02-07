@@ -38,11 +38,32 @@
 #include <math.h>
 #include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
+#include "qm_uart.h"
+#include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "bmx1xx/bmx1xx.h"
+#ifdef ENABLE_CALIBRATION
+#include "calibration.h"
+#endif
 
-#define NUM_SAMPLES (500)
+#define NUM_SAMPLES (5000)
 #define M_PI 3.14159265358979323846
+
+/*
+ * mag_bias or hard-iron distortions: are created by objects that produce a
+ * magnetic field (e.g. a speaker or a piece of magnetized iron).
+ *
+ * mag_scale or soft-iron distortions: deflections or alterations in the
+ * existing magnetic field, commonly caused by metals such as nickel and
+ * iron.
+ */
+
+double mag_bias[3] = {0, 0, 0}; /* x, y, z biases */
+#ifdef ENABLE_CALIBRATION
+double mag_scale[3] = {0, 0, 0}; /* x, y, z scales */
+#endif				 /* ENABLE_CALIBRATION */
 
 /* Convert degrees into compass direction. */
 static const char *degrees_to_direction(unsigned int deg)
@@ -77,6 +98,8 @@ int main(void)
 	double heading;
 	int deg;
 	uint32_t count = 0;
+	/* Adjusted magnetometer readings */
+	double mag_x, mag_y, mag_z;
 
 	QM_PUTS("Starting: Magnetometer");
 
@@ -99,6 +122,33 @@ int main(void)
 		QM_PUTS("Error: Unable to set BBMC150 to high accuracy.");
 		return 1;
 	}
+#ifdef ENABLE_CALIBRATION
+	uint8_t c = 0;
+	/* Mux out RX pin */
+	if (STDOUT_UART == QM_UART_0) {
+		qm_pmux_select(QM_PIN_ID_13, QM_PIN_13_FN_UART0_RXD);
+		qm_pmux_input_en(QM_PIN_ID_13, true);
+	} else {
+		qm_pmux_select(QM_PIN_ID_21, QM_PIN_21_FN_UART1_RXD);
+		qm_pmux_input_en(QM_PIN_ID_21, true);
+	}
+	QM_PRINTF("Do you want to calibrate the magnetometer? [y/n]\n");
+	/* Awaiting user's input */
+	while (0 != qm_uart_read(STDOUT_UART, &c, 0x00)) {
+		QM_PRINTF("Error reading from STDOUT_UART!\n");
+	};
+	if (('y' == c) || ('Y' == c)) {
+		if (0 != mag_calibration(mag_bias, mag_scale)) {
+			QM_PRINTF("Calibration failed!\n");
+			return 1;
+		}
+	} else {
+		QM_PRINTF("Magnetometer calibration skipped!\n");
+		mag_scale[0] = 1;
+		mag_scale[1] = 1;
+		mag_scale[2] = 1;
+	}
+#endif /* ENABLE_CALIBRATION */
 
 	for (count = 0; count < NUM_SAMPLES; count++) {
 		clk_sys_udelay(125000);
@@ -106,8 +156,20 @@ int main(void)
 		/* Read the value from the magneto. */
 		bmx1xx_read_mag(&mag);
 
+		/* Adjust magnetometer readings */
+		/* Correct hard-iron errors */
+		mag_x = mag.x - mag_bias[0];
+		mag_y = mag.y - mag_bias[1];
+		mag_z = mag.z - mag_bias[2];
+#ifdef ENABLE_CALIBRATION
+		/* Correct soft-iron errors */
+		mag_x *= mag_scale[0];
+		mag_y *= mag_scale[1];
+		mag_z *= mag_scale[2];
+#endif /* ENABLE_CALIBRATION */
+
 		/* Calculate the heading. */
-		heading = atan2(mag.y, mag.x);
+		heading = atan2(mag_y, mag_x);
 		if (heading < 0) {
 			heading += (2 * M_PI);
 		}
@@ -115,8 +177,9 @@ int main(void)
 		/* Convert the heading into degrees. */
 		deg = (int)((heading * 180) / M_PI);
 
-		QM_PRINTF("x: %d y: %d z: %d deg: %d direction: %s\n", mag.x,
-			  mag.y, mag.z, deg, degrees_to_direction(deg));
+		QM_PRINTF("x:\t%d\ty:\t%d\tz:\t%d\tdeg:\t%d\tdirection:\t%s\n",
+			  (int)mag_x, (int)mag_y, (int)mag_z, deg,
+			  degrees_to_direction(deg));
 	}
 
 	QM_PUTS("Finished: Magnetometer");

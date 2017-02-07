@@ -36,6 +36,7 @@
  */
 
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 
 /*
  * x86 CPU FLAGS.IF register field (Interrupt enable Flag, bit 9), indicating

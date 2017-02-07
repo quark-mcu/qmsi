@@ -36,8 +36,10 @@
 
 #include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_uart.h"
 
 #define BANNER_STR ("\nQMSI echo application, Pol'd message.\n")
@@ -130,23 +132,23 @@ static void pin_mux_setup()
 /* Mux out STDOUT_UART TX/RX pins and enable input for RX. */
 #if (QUARK_SE)
 	if (STDOUT_UART == QM_UART_0) {
-		qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_0);
-		qm_pmux_select(QM_PIN_ID_19, QM_PMUX_FN_0);
+		qm_pmux_select(QM_PIN_ID_18, QM_PIN_18_FN_UART0_RXD);
+		qm_pmux_select(QM_PIN_ID_19, QM_PIN_19_FN_UART0_TXD);
 		qm_pmux_input_en(QM_PIN_ID_18, true);
 	} else {
-		qm_pmux_select(QM_PIN_ID_16, QM_PMUX_FN_2);
-		qm_pmux_select(QM_PIN_ID_17, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_16, QM_PIN_16_FN_UART1_TXD);
+		qm_pmux_select(QM_PIN_ID_17, QM_PIN_17_FN_UART1_RXD);
 		qm_pmux_input_en(QM_PIN_ID_17, true);
 	}
 
 #elif(QUARK_D2000)
 	if (STDOUT_UART == QM_UART_0) {
-		qm_pmux_select(QM_PIN_ID_12, QM_PMUX_FN_2);
-		qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_12, QM_PIN_12_FN_UART0_TXD);
+		qm_pmux_select(QM_PIN_ID_13, QM_PIN_13_FN_UART0_RXD);
 		qm_pmux_input_en(QM_PIN_ID_13, true);
 	} else {
-		qm_pmux_select(QM_PIN_ID_20, QM_PMUX_FN_2);
-		qm_pmux_select(QM_PIN_ID_21, QM_PMUX_FN_2);
+		qm_pmux_select(QM_PIN_ID_20, QM_PIN_20_FN_UART1_TXD);
+		qm_pmux_select(QM_PIN_ID_21, QM_PIN_21_FN_UART1_RXD);
 		qm_pmux_input_en(QM_PIN_ID_21, true);
 	}
 
@@ -351,9 +353,11 @@ int main(void)
 
 /* Register the UART interrupts. */
 #if (STDOUT_UART_0)
-	qm_irq_request(QM_IRQ_UART_0_INT, qm_uart_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_UART_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_UART_0_INT, qm_uart_0_isr);
 #elif(STDOUT_UART_1)
-	qm_irq_request(QM_IRQ_UART_1_INT, qm_uart_1_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_UART_1_INT);
+	QM_IRQ_REQUEST(QM_IRQ_UART_1_INT, qm_uart_1_isr);
 #endif
 
 	/* Used on both TX and RX. */
@@ -371,8 +375,11 @@ int main(void)
 	}
 
 	/* Register the DMA interrupts. */
-	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_0);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_ERROR_INT);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* DMA controller initialization. */
 	if (qm_dma_init(QM_DMA_0)) {

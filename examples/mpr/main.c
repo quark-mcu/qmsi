@@ -36,6 +36,7 @@
 
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_mpr.h"
 
@@ -75,7 +76,8 @@ int main(void)
 	mpr_base = SRAM_BASE + (lower_bound * MPR_PAGE_SIZE);
 
 	/* Request the IRQ. */
-	qm_irq_request(QM_IRQ_SRAM_MPR_0_INT, qm_sram_mpr_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_SRAM_MPR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_SRAM_MPR_0_INT, qm_sram_mpr_0_isr);
 
 	/* Set the violation policy to trigger an interrupt. */
 	qm_mpr_set_violation_policy(MPR_VIOL_MODE_INTERRUPT,
@@ -88,7 +90,8 @@ int main(void)
 	cfg.up_bound = lower_bound;
 	cfg.low_bound = lower_bound;
 
-	qm_mpr_set_config(QM_MPR_0, &cfg);
+	/* Use MPR_1 as MPR_0 is reserved by the bootloader. */
+	qm_mpr_set_config(QM_MPR_1, &cfg);
 
 	/* Trigger a violation event by attempting a write inside the MPR. */
 	REG_VAL(mpr_base + 1) = 0xff;

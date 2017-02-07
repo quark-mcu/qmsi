@@ -54,13 +54,22 @@
 #include "qm_common.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "ss_init.h"
+#include "soc_watch.h"
 
-#define PIN_OUT (0)
-#define PIN_INTR (3)
+#define PIN_OUT (QM_PIN_ID_0)
+#define PIN_INTR (QM_PIN_ID_3)
 #define QM_SCSS_GP_SENSOR_READY BIT(2)
+
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(PIN_OUT, QM_PIN_0_FN_GPIO_0);
+	qm_pmux_select(PIN_INTR, QM_PIN_3_FN_GPIO_3);
+}
 
 int main(void)
 {
@@ -71,8 +80,7 @@ int main(void)
 	QM_PUTS("Starting: Power LPSS");
 
 	/* Set GPIO pin muxing. */
-	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
-	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
+	pin_mux_setup();
 
 	/* Request IRQ and write GPIO port config. */
 	cfg.direction = BIT(PIN_OUT);     /* Set PIN_OUT as output. */
@@ -84,7 +92,8 @@ int main(void)
 	cfg.callback = NULL;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 
@@ -98,7 +107,10 @@ int main(void)
 	 * Go to C2. Sensor Subsystem will perform the transition to LPSS.
 	 * Once woken up, SS will wake up the x86 core with the GPIO interrupt.
 	 */
-	power_cpu_c2();
+	qm_power_cpu_c2();
+
+	/* Log the interrupt event in soc_watch. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_GPIO_0_INT_VECTOR);
 
 	QM_PUTS("Wake up from LPSS.");
 
@@ -112,9 +124,15 @@ int main(void)
 	 * Go to C2LP. Sensor Subsystem will perform the transition to LPSS.
 	 * Once woken up, SS will wake up the x86 core with the GPIO interrupt.
 	 */
-	power_cpu_c2lp();
+	qm_power_cpu_c2lp();
+
+	/* Log the interrupt event in soc_watch. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_GPIO_0_INT_VECTOR);
 
 	QM_PUTS("Wake up from LPSS.");
+
+	/* Trigger soc_watch flush. */
+	SOC_WATCH_TRIGGER_FLUSH();
 
 	QM_PUTS("Finished: Power LPSS");
 

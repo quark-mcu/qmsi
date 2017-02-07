@@ -36,6 +36,7 @@
  */
 
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pic_timer.h"
 
@@ -65,7 +66,8 @@ int main(void)
 #if (HAS_APIC) /* Request the interrupt. */
 	qm_int_vector_request(QM_X86_PIC_TIMER_INT_VECTOR, qm_pic_timer_0_isr);
 #elif(HAS_MVIC)
-	qm_irq_request(QM_IRQ_PIC_TIMER, qm_pic_timer_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_PIC_TIMER);
+	QM_IRQ_REQUEST(QM_IRQ_PIC_TIMER, qm_pic_timer_0_isr);
 #endif /* HAS_APIC */
 
 	/* Write the config and start the timer. */

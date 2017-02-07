@@ -41,6 +41,7 @@
 
 #include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
 #include "qm_soc_regs.h"
@@ -52,8 +53,32 @@
 
 #define TWO_SEC_AT_32MHZ (0x04000000)
 
+static uint32_t switch_rtc_to_level(void)
+{
+	uint32_t prev_trigger;
+
+	/* The sensor cannot be woken up with an edge triggered
+	 * interrupt from the RTC and the AON Counter.
+	 * Switch to Level triggered interrupts and restore
+	 * the setting when waking up.
+	 */
+	__builtin_arc_sr(QM_IRQ_RTC_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	prev_trigger = __builtin_arc_lr(QM_SS_AUX_IRQ_TRIGGER);
+	__builtin_arc_sr(QM_SS_IRQ_LEVEL_SENSITIVE, QM_SS_AUX_IRQ_TRIGGER);
+
+	return prev_trigger;
+}
+
+static void restore_rtc_trigger(uint32_t trigger)
+{
+	/* Restore the RTC interrupt trigger when waking up. */
+	__builtin_arc_sr(QM_IRQ_RTC_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	__builtin_arc_sr(trigger, QM_SS_AUX_IRQ_TRIGGER);
+}
+
 int main(void)
 {
+	uint32_t rtc_trigger;
 	qm_ss_timer_config_t ss_timer_cfg;
 	qm_rtc_config_t rtc_cfg;
 
@@ -83,8 +108,8 @@ int main(void)
 
 	QM_PUTS("Go to ss1. Core Off Timers On RTC On");
 
-	/* Go to SS1, RTC will wake. */
-	ss_power_cpu_ss1(SS_POWER_CPU_SS1_TIMER_ON);
+	/* Go to SS1, Timer0 will wake. */
+	qm_ss_power_cpu_ss1(QM_SS_POWER_CPU_SS1_TIMER_ON);
 	QM_PUTS("Wake up from ss1.");
 
 	/* Disable timer as it won't wake for following states. */
@@ -104,22 +129,31 @@ int main(void)
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+
+	rtc_trigger = switch_rtc_to_level();
 
 	QM_PUTS("Go to ss1. Core Off Timers Off RTC On");
 	/* Go to SS1, RTC will wake. */
-	ss_power_cpu_ss1(SS_POWER_CPU_SS1_TIMER_OFF);
+	qm_ss_power_cpu_ss1(QM_SS_POWER_CPU_SS1_TIMER_OFF);
 	QM_PUTS("Wake up from ss1.");
+
+	restore_rtc_trigger(rtc_trigger);
 
 	/* Set another alarm 4 seconds from now. */
 	qm_rtc_set_alarm(QM_RTC_0,
-			 QM_RTC[QM_RTC_0].rtc_ccvr +
+			 QM_RTC[QM_RTC_0]->rtc_ccvr +
 			     (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1) << 2));
+
+	rtc_trigger = switch_rtc_to_level();
 
 	QM_PUTS("Go to ss2.");
 	/* Go to SS2, Timer will wake. */
-	ss_power_cpu_ss2();
+	qm_ss_power_cpu_ss2();
 	QM_PUTS("Wake up from ss2.");
+
+	restore_rtc_trigger(rtc_trigger);
 
 	QM_PUTS("Finished: SS Power Core");
 

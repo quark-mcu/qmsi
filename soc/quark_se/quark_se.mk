@@ -30,7 +30,8 @@
 ### Variables
 SOC = quark_se
 SOC_DIR = $(BASE_DIR)/soc/$(SOC)
-LINKER_FILE ?= $(SOC_DIR)/$(TARGET).ld
+MEMORY_LAYOUT ?= default
+LINKER_FILE ?= $(SOC_DIR)/linker/$(MEMORY_LAYOUT)/$(TARGET).ld
 ENABLE_RESTORE_CONTEXT ?= 1
 
 ### Flags

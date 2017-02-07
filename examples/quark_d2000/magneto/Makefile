@@ -44,5 +44,12 @@ ifneq ($(SOC),quark_d2000)
 $(error Supported SOC value is 'quark_d2000')
 endif
 
+ENABLE_CALIBRATION ?= yes
+
+ifeq ($(ENABLE_CALIBRATION), yes)
+    CFLAGS += -DENABLE_CALIBRATION
+    $(info Calibration ENABLED!)
+endif
+
 ### Make includes
 include $(BASE_DIR)/examples/app.mk

@@ -41,6 +41,7 @@
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "usb_cdc_acm.h"
 
@@ -107,7 +108,8 @@ int main(void)
 
 	QM_PUTS("Starting: USB CDC ACM Example");
 
-	qm_irq_request(QM_IRQ_USB_0_INT, qm_usb_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_USB_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_USB_0_INT, qm_usb_0_isr);
 
 	/* Enable the USB VBUS on Quark SE DevBoard. */
 	enable_usb_vbus();

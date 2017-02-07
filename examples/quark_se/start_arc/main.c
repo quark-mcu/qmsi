@@ -51,7 +51,7 @@ int main(void)
 		sensor_activation();
 
 		/* Wait for ARC to enter sleep. */
-		power_sleep_wait();
+		qm_power_sleep_wait();
 	}
 #else
 	/* Start ARC. */

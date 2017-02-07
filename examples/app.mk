@@ -103,7 +103,8 @@ endif
 ### routing UART_1 to a dual FTDI JTAG/UART chip.
 ### This is the default stdio option for Quark SE.
 ifeq ($(SOC), quark_se)
-CFLAGS += -DSTDOUT_UART_1 -DUART1_FTDI
+ENABLE_STDOUT_UART ?= UART_1
+ENABLE_UART1_FTDI ?= 1
 endif
 
 ### Make includes
@@ -142,7 +143,7 @@ $(QFU): $(APP)
 ifeq ($(QM_BOOTLOADER_DIR), )
 	$(error QM_BOOTLOADER_DIR needs to point to the root of qm-bootloader)
 endif
-	$(QFU_GEN) $(APP) -p $(QFU_PARTITION)
+	$(QFU_GEN) $(APP) --soc $(SOC) -p $(QFU_PARTITION)
 
 qfu: $(QFU)
 

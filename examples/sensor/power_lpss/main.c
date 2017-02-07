@@ -41,6 +41,7 @@
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
 #include "qm_soc_regs.h"
@@ -49,6 +50,7 @@
 #include "qm_ss_timer.h"
 #include "qm_uart.h"
 #include "ss_power_states.h"
+#include "soc_watch.h"
 
 #define PIN_OUT (0)
 
@@ -58,10 +60,34 @@
 
 #define GPIO_TOGGLE_DELAY 500
 
+static uint32_t switch_rtc_to_level(void)
+{
+	uint32_t prev_trigger;
+
+	/* The sensor cannot be woken up with an edge triggered
+	 * interrupt from the RTC and the AON Counter.
+	 * Switch to Level triggered interrupts and restore
+	 * the setting when waking up.
+	 */
+	__builtin_arc_sr(QM_IRQ_RTC_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	prev_trigger = __builtin_arc_lr(QM_SS_AUX_IRQ_TRIGGER);
+	__builtin_arc_sr(QM_SS_IRQ_LEVEL_SENSITIVE, QM_SS_AUX_IRQ_TRIGGER);
+
+	return prev_trigger;
+}
+
+static void restore_rtc_trigger(uint32_t trigger)
+{
+	/* Restore the RTC interrupt trigger when waking up. */
+	__builtin_arc_sr(QM_IRQ_RTC_0_INT_VECTOR, QM_SS_AUX_IRQ_SELECT);
+	__builtin_arc_sr(trigger, QM_SS_AUX_IRQ_TRIGGER);
+}
+
 int main(void)
 {
 	qm_rtc_config_t rtc_cfg;
 	uint32_t aonc_start;
+	uint32_t rtc_trigger;
 
 	/*  Initialise RTC configuration. */
 	rtc_cfg.init_val = 0; /* Set initial value to 0. */
@@ -80,17 +106,18 @@ int main(void)
 	 * If an entry to sleep is initiated without waiting for the
 	 * transaction to complete the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_AONC[0].aonc_cnt;
-	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
+	aonc_start = QM_AONC[QM_AONC_0]->aonc_cnt;
+	while (QM_AONC[QM_AONC_0]->aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/*
 	 * Enable LPSS by the Sensor Subsystem.
 	 * This will clock gate sensor peripherals.
 	 */
-	ss_power_soc_lpss_enable();
+	qm_ss_power_soc_lpss_enable();
 
 	/*
 	 * Signal to the x86 core that the Sensor Subsystem
@@ -98,8 +125,15 @@ int main(void)
 	 */
 	QM_SCSS_GP->gps2 |= QM_SCSS_GP_SENSOR_READY;
 
+	rtc_trigger = switch_rtc_to_level();
+
 	/* Go to LPSS, RTC will wake the Sensor Subsystem up. */
-	ss_power_cpu_ss2();
+	qm_ss_power_cpu_ss2();
+
+	/* Log the interrupt event in soc_watch. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_RTC_0_INT_VECTOR);
+
+	restore_rtc_trigger(rtc_trigger);
 
 	/* Clear the SENSOR_READY flag in General Purpose Sticky Register 2. */
 	QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_SENSOR_READY;
@@ -108,7 +142,7 @@ int main(void)
 	 * Disable LPSS.
 	 * This will restore clock gating of sensor peripherals.
 	 */
-	ss_power_soc_lpss_disable();
+	qm_ss_power_soc_lpss_disable();
 
 	/* Core still in C2 mode. */
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
@@ -118,7 +152,7 @@ int main(void)
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
 
 	/* Set another alarm 1 second from now. */
-	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
+	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0]->rtc_ccvr +
 				       (QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1)));
 	/*
 	 * The RTC clock resides in a different clock domain
@@ -128,15 +162,15 @@ int main(void)
 	 * If an entry to sleep is initiated without waiting for the
 	 * transaction to complete the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_AONC[0].aonc_cnt;
-	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
+	aonc_start = QM_AONC[QM_AONC_0]->aonc_cnt;
+	while (QM_AONC[QM_AONC_0]->aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
 	/*
 	 * Enable LPSS by the Sensor Subsystem.
 	 * This will clock gate sensor peripherals.
 	 */
-	ss_power_soc_lpss_enable();
+	qm_ss_power_soc_lpss_enable();
 
 	/*
 	 * Signal to the x86 core that the Sensor Subsystem
@@ -144,8 +178,14 @@ int main(void)
 	 */
 	QM_SCSS_GP->gps2 |= QM_SCSS_GP_SENSOR_READY;
 
+	rtc_trigger = switch_rtc_to_level();
+
 	/* Go to LPSS, RTC will wake the Sensor Subsystem up. */
-	ss_power_cpu_ss2();
+	qm_ss_power_cpu_ss2();
+
+	/* Log the interrupt event in soc_watch. */
+	SOC_WATCH_LOG_EVENT(SOCW_EVENT_INTERRUPT, QM_IRQ_RTC_0_INT_VECTOR);
+	restore_rtc_trigger(rtc_trigger);
 
 	/* Clear the SENSOR_READY flag in General Purpose Sticky Register 2. */
 	QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_SENSOR_READY;
@@ -154,7 +194,7 @@ int main(void)
 	 * Disable LPSS.
 	 * This will restore clock gating of sensor peripherals.
 	 */
-	ss_power_soc_lpss_disable();
+	qm_ss_power_soc_lpss_disable();
 
 	/* Core still in C2LP mode. */
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
@@ -162,6 +202,9 @@ int main(void)
 	qm_gpio_set_pin(QM_GPIO_0, PIN_OUT);
 	clk_sys_udelay(GPIO_TOGGLE_DELAY);
 	qm_gpio_clear_pin(QM_GPIO_0, PIN_OUT);
+
+	/* Trigger soc_watch flush. */
+	SOC_WATCH_TRIGGER_FLUSH();
 
 	return 0;
 }

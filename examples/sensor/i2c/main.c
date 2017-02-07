@@ -200,7 +200,7 @@ void ss_i2c_irq_combined_transaction_example()
 	ss_i2c_0_irq_complete = false;
 	ss_i2c_0_irq_rc_error = false;
 
-	if (qm_ss_i2c_master_irq_transfer(QM_I2C_0, &async_irq_read_xfer,
+	if (qm_ss_i2c_master_irq_transfer(QM_SS_I2C_0, &async_irq_read_xfer,
 					  EEPROM_SLAVE_ADDR)) {
 		QM_PUTS("Error: IRQ read failed");
 	}
@@ -224,10 +224,19 @@ int main(void)
 	/*  Enable I2C 0. */
 	ss_clk_i2c_enable(QM_SS_I2C_0);
 
-	qm_ss_irq_request(QM_SS_IRQ_I2C_0_ERROR_INT, qm_ss_i2c_0_isr);
-	qm_ss_irq_request(QM_SS_IRQ_I2C_0_RX_AVAIL_INT, qm_ss_i2c_0_isr);
-	qm_ss_irq_request(QM_SS_IRQ_I2C_0_TX_REQ_INT, qm_ss_i2c_0_isr);
-	qm_ss_irq_request(QM_SS_IRQ_I2C_0_STOP_DET_INT, qm_ss_i2c_0_isr);
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_i2c_0_int.err_mask);
+	QM_IR_UNMASK_INTERRUPTS(
+	    QM_INTERRUPT_ROUTER->ss_i2c_0_int.rx_avail_mask);
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_i2c_0_int.tx_req_mask);
+	QM_IR_UNMASK_INTERRUPTS(
+	    QM_INTERRUPT_ROUTER->ss_i2c_0_int.stop_det_mask);
+
+	qm_ss_irq_request(QM_SS_IRQ_I2C_0_ERROR_INT, qm_ss_i2c_0_error_isr);
+	qm_ss_irq_request(QM_SS_IRQ_I2C_0_RX_AVAIL_INT,
+			  qm_ss_i2c_0_rx_avail_isr);
+	qm_ss_irq_request(QM_SS_IRQ_I2C_0_TX_REQ_INT, qm_ss_i2c_0_tx_req_isr);
+	qm_ss_irq_request(QM_SS_IRQ_I2C_0_STOP_DET_INT,
+			  qm_ss_i2c_0_stop_det_isr);
 
 	/* Configure I2C. */
 	cfg.address_mode = QM_SS_I2C_7_BIT;

@@ -36,6 +36,7 @@
 
 #include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pwm.h"
 
@@ -66,8 +67,10 @@ int main(void)
 
 	/* Set the configuration of the Timer. */
 	qm_pwm_set_config(QM_PWM_0, QM_PWM_ID_1, &cfg);
+
 	/* Register the ISR with the SoC. */
-	qm_irq_request(QM_IRQ_PWM_0_INT, qm_pwm_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_PWM_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_PWM_0_INT, qm_pwm_0_isr_0);
 
 	/* Start the Timer. */
 	qm_pwm_start(QM_PWM_0, QM_PWM_ID_1);

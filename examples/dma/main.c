@@ -41,6 +41,7 @@
 #include "clk.h"
 #include "qm_dma.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "get_ticks.h"
 
@@ -252,11 +253,15 @@ int main(void)
 	/*
 	 * Request the required interrupts. Depending on the channel used a
 	 * different isr is set:
-	 *     qm_irq_request(QM_IRQ_DMA_0_INT_<channel>,
+	 *     QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_<channel>,
 	 * qm_dma_0_isr_<channel>)
 	 */
-	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_0);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_ERROR_INT);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* Set the controller and channel IDs. */
 	chan_desc.controller_id = QM_DMA_0;

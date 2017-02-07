@@ -44,6 +44,7 @@ SUBDIRS := $(subst ./adc/,,${SUBDIRS})
 SUBDIRS := $(subst ./adc_continuous/,,${SUBDIRS})
 SUBDIRS := $(subst ./magneto/,,${SUBDIRS})
 SUBDIRS := $(subst ./quark_d2000/,,${SUBDIRS})
+
 ifeq ($(TARGET), x86)
 #### Excluding the non supported modules
 SUBDIRS := $(subst ./sensor/,,${SUBDIRS})
@@ -53,7 +54,6 @@ else ifeq ($(TARGET), sensor)
 #### Excluding the non supported modules
 SUBDIRS := $(subst ./pic_timer/,,${SUBDIRS})
 SUBDIRS := $(subst ./crypto/,,${SUBDIRS})
-SUBDIRS := $(subst ./quark_se/,,${SUBDIRS})
 SUBDIRS := $(subst ./power_profiler/,,${SUBDIRS})
 SUBDIRS := $(subst ./irq_lock/,,${SUBDIRS})
 endif
@@ -64,6 +64,7 @@ SUBDIRS := $(subst ./quark_se/,,${SUBDIRS})
 SUBDIRS := $(subst ./sensor/,,${SUBDIRS})
 SUBDIRS := $(subst ./mailbox/,,${SUBDIRS})
 SUBDIRS := $(subst ./gyro/,,${SUBDIRS})
+SUBDIRS := $(subst ./sleep_multicore/,,${SUBDIRS})
 endif
 
 all clean realclean:: $(SUBDIRS)

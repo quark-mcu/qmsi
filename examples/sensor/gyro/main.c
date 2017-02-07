@@ -37,6 +37,7 @@
 
 #include "clk.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
 #include "qm_uart.h"
@@ -67,7 +68,7 @@ static void gyro_callback(void *data)
 	/* Reset the RTC alarm to fire again if necessary. */
 	if (cb_count < NUM_SAMPLES) {
 		qm_rtc_set_alarm(QM_RTC_0,
-				 (QM_RTC[QM_RTC_0].rtc_ccvr + INTERVAL));
+				 (QM_RTC[QM_RTC_0]->rtc_ccvr + INTERVAL));
 		cb_count++;
 	} else {
 		complete = true;
@@ -89,7 +90,8 @@ int main(void)
 	rtc.callback_data = NULL;
 	rtc.prescaler = CLK_RTC_DIV_1;
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Enable the RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER | CLK_PERIPH_CLK);
