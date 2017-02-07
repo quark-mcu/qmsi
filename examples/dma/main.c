@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 #include "clk.h"
 #include "qm_dma.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "get_ticks.h"
 
@@ -69,6 +70,14 @@ volatile bool irq_fired = false;
 volatile uint32_t irq_len;
 volatile int irq_error_code;
 volatile int transfer_count = 0;
+
+/*
+ * We own the memory where the driver will set the linked lists. 2 LLIs
+ * are needed for each DMA transfer configuration call. The bootloader protects
+ * stack for Lakemont access only, thus we must keep these buffers out of it.
+ */
+static qm_dma_linked_list_item_t
+    lli_buf[MULTIBLOCK_NUM_BUFFERS * MULTIBLOCK_NUM_LLI_PER_BUFFER];
 
 /* DMA transfer callback. */
 static void transfer_callback(void *callback_context, uint32_t len,
@@ -170,13 +179,6 @@ static void do_transfer_multi(dma_channel_desc_t *p_chan_desc)
 	int return_code;
 	qm_dma_multi_transfer_t multi_transfer = {0};
 
-	/*
-	 * We own the memory where the driver will set the linked lists. 2 LLIs
-	 * are needed for each DMA transfer configuration call.
-	 */
-	qm_dma_linked_list_item_t
-	    lli_buf[MULTIBLOCK_NUM_BUFFERS * MULTIBLOCK_NUM_LLI_PER_BUFFER];
-
 	/* Clear RX buffer. */
 	for (unsigned int i = 0; i < RX_BUFF_SIZE; i++) {
 		rx_data[0][i] = '.';
@@ -252,11 +254,15 @@ int main(void)
 	/*
 	 * Request the required interrupts. Depending on the channel used a
 	 * different isr is set:
-	 *     qm_irq_request(QM_IRQ_DMA_0_INT_<channel>,
+	 *     QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_<channel>,
 	 * qm_dma_0_isr_<channel>)
 	 */
-	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_0);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_ERROR_INT);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/* Set the controller and channel IDs. */
 	chan_desc.controller_id = QM_DMA_0;

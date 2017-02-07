@@ -19,6 +19,7 @@ in the repo. The layout, variable name and style should match existing apps.
 
 Structure
 *********
+
 main.c file should conform to the following structure:
 
 * Copyright notice.
@@ -64,17 +65,21 @@ to the following:
 
 Output
 ******
+
 The application should always start by printing the following:
+
 ::
 
         Starting: <APP_NAME>
 
 The application should print the following when it completes:
+
 ::
 
         Finished: <APP_NAME>
 
 If an error has been encountered the message must follow this format:
+
 ::
 
         Error: <ERROR_STRING>

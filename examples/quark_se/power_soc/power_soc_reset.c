@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,7 +78,7 @@ static void app_sleep()
 	QM_SCSS_GP->gps2 |= QM_SCSS_GP_SOC_STATE_SLEEP;
 
 	/* Go to sleep, RTC will wake me up. */
-	power_soc_sleep();
+	qm_power_soc_sleep();
 
 	/* This is unreachable code and should never be executed. */
 	QM_PUTS("Error: Reached unreachable code.");
@@ -95,7 +95,7 @@ static void app_deep_sleep()
 	 * interrupt. */
 	QM_SCSS_PMU->slp_cfg |= QM_SCSS_SLP_CFG_RTC_DIS;
 	/* Go to deep sleep, Comparator will wake me up. */
-	power_soc_deep_sleep();
+	qm_power_soc_deep_sleep();
 
 	/* This is unreachable code and should never be executed. */
 	QM_PUTS("Error: Reached unreachable code.");

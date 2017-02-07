@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -747,6 +747,24 @@ int qm_ss_adc_restore_context(const qm_ss_adc_t adc,
 			 controller + QM_SS_ADC_DIVSEQSTAT);
 	__builtin_arc_sr(ctx->adc_seq, controller + QM_SS_ADC_SEQ);
 	__builtin_arc_sr(ctx->adc_ctrl, controller + QM_SS_ADC_CTRL);
+
+	return 0;
+}
+#else
+int qm_ss_adc_save_context(const qm_ss_adc_t adc,
+			   qm_ss_adc_context_t *const ctx)
+{
+	(void)adc;
+	(void)ctx;
+
+	return 0;
+}
+
+int qm_ss_adc_restore_context(const qm_ss_adc_t adc,
+			      const qm_ss_adc_context_t *const ctx)
+{
+	(void)adc;
+	(void)ctx;
 
 	return 0;
 }

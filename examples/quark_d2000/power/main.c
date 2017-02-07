@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,8 +42,10 @@
 #include "qm_comparator.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_rtc.h"
 
 /*
@@ -55,7 +57,9 @@
  * the GPIO/comparator IRQ and this will result in the board not being able to
  * recover from deep sleep.
  */
-#define WAKEUP_COMPARATOR_PIN (6)
+#define WAKEUP_COMPARATOR_PIN (QM_PIN_ID_6)
+#define WAKEUP_COMPARATOR_AIN_FN (QM_PIN_6_FN_AIN_6)
+#define WAKEUP_COMPARATOR_GPIO_FN (QM_PIN_6_FN_GPIO_6)
 /*
  * Both the analog comparator and GPIO can be used to wake up from deep sleep.
  * The value of USE_COMPARATOR_FOR_DEEP_SLEEP determines which of the two
@@ -105,28 +109,30 @@ static void rtc_sleep_wakeup()
 	rtc_cfg.prescaler = CLK_RTC_DIV_1;
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	QM_PUTS("CPU Halt.");
 	/* Halt the CPU, RTC alarm will wake. */
-	power_cpu_halt();
+	qm_power_cpu_halt();
 	QM_PUTS("CPU Halt wakeup.");
 
 	/* Setup wake up isr for RTC. */
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Set another alarm one second from now. */
-	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
+	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0]->rtc_ccvr +
 				       QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1));
 	QM_PUTS("Go to sleep.");
 	/* Go to sleep, RTC will wake. */
-	power_soc_sleep();
+	qm_power_soc_sleep();
 	QM_PUTS("Wake up from sleep.");
 
 	QM_PUTS("Go to deep sleep with RTC.");
-	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0].rtc_ccvr +
+	qm_rtc_set_alarm(QM_RTC_0, QM_RTC[QM_RTC_0]->rtc_ccvr +
 				       QM_RTC_ALARM_SECOND(CLK_RTC_DIV_1) * 5);
-	power_soc_deep_sleep(POWER_WAKE_FROM_RTC);
+	qm_power_soc_deep_sleep(QM_POWER_WAKE_FROM_RTC);
 }
 
 static void comparator_gpio_sleep_wakeup()
@@ -144,10 +150,12 @@ static void comparator_gpio_sleep_wakeup()
 	    BIT(WAKEUP_COMPARATOR_PIN); /* Ref internal voltage. */
 	ac_cfg.polarity = 0x0; /* Fire if greater than ref (high level). */
 	ac_cfg.power = BIT(WAKEUP_COMPARATOR_PIN);  /* Normal operation mode. */
-	ac_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
+	ac_cfg.cmp_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
 	ac_cfg.callback = ac_example_callback;
 	qm_ac_set_config(&ac_cfg);
-	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_COMPARATOR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 #else
 	gpio_cfg.direction = 0;
 	gpio_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Interrupt enabled. */
@@ -157,7 +165,9 @@ static void comparator_gpio_sleep_wakeup()
 	gpio_cfg.int_bothedge = 0;	    /* Both edge disabled. */
 	QM_GPIO[QM_GPIO_0]->gpio_ls_sync = 0; /* No synchronisation. */
 	gpio_cfg.callback = gpio_example_callback;
-	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 	qm_gpio_set_config(QM_GPIO_0, &gpio_cfg);
 #endif /* USE_COMPARATOR_FOR_DEEP_SLEEP. */
 
@@ -171,9 +181,9 @@ static void comparator_gpio_sleep_wakeup()
  * SoC from deep sleep mode, in this example we are using AC / GPIO 6.
  */
 #if (USE_COMPARATOR_FOR_DEEP_SLEEP)
-	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_1);
+	qm_pmux_select(WAKEUP_COMPARATOR_PIN, WAKEUP_COMPARATOR_AIN_FN);
 #else
-	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_0);
+	qm_pmux_select(WAKEUP_COMPARATOR_PIN, WAKEUP_COMPARATOR_GPIO_FN);
 #endif /* USE_COMPARATOR_FOR_DEEP_SLEEP. */
 
 	qm_pmux_input_en(QM_PIN_ID_6, true);
@@ -188,11 +198,7 @@ static void comparator_gpio_sleep_wakeup()
 	    BIT(WAKEUP_COMPARATOR_PIN) | ENABLE_JTAG_PINS;
 	QM_SCSS_PMUX->pmux_pullup[0] = 0;
 
-	/* Mux out comparator. */
-	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_6, true);
-
-	power_soc_deep_sleep(POWER_WAKE_FROM_GPIO_COMP);
+	qm_power_soc_deep_sleep(QM_POWER_WAKE_FROM_GPIO_COMP);
 
 	/* Restore previous pinmuxing settings. */
 	QM_SCSS_PMUX->pmux_sel[0] = pmux_sel_save[0];

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,11 +30,11 @@
 /*
  * Always On (AON) General-Purpose Input/Output (GPIO)
  *
- * This example app is exclusive to the Intel(R) Quark(TM) SE development
- * platform.
- *
  * This example app will trigger an interrupt when push button 0 is pressed and
  * prints the callback status to the screen.
+ *
+ * This example app is exclusive to the Intel(R) Quark(TM) SE development
+ * platform.
  *
  * On the Intel(R) Quark(TM) SE development platform, PIN_INTR is triggered by
  * pressing push button 0, which is marked as 'PB0' on the board.
@@ -43,6 +43,7 @@
 #include <inttypes.h>
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 
 #define PIN_INTR 4
@@ -73,7 +74,8 @@ int main(void)
 	cfg.callback = aon_gpio_example_callback;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_AON_GPIO_0_INT, qm_aon_gpio_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_AON_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_AON_GPIO_0_INT, qm_aon_gpio_0_isr);
 
 	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
 
