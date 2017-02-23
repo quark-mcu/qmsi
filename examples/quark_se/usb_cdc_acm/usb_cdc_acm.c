@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,6 +27,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "clk.h"
 #include "usb_cdc_acm.h"
 #include "usb_common.h"
 #include "usb_device.h"
@@ -62,10 +63,6 @@ typedef struct {
 /* Device data structure. */
 typedef struct {
 	qm_usb_status_t usb_status;
-	uint8_t tx_ready;		     /* TX ready status. */
-	uint8_t rx_ready;		     /* RX ready status. */
-	uint8_t tx_irq_ena;		     /* TX interrupt enable status. */
-	uint8_t rx_irq_ena;		     /* RX interrupt enable status. */
 	uint8_t rx_buf[CDC_ACM_BUFFER_SIZE]; /* Internal RX buffer. */
 	uint32_t rx_buf_head; /* Head of the internal RX buffer. */
 	uint32_t rx_buf_tail; /* Tail of the internal RX buffer. */
@@ -79,7 +76,6 @@ typedef struct {
 	uint8_t serial_state;
 	/* CDC ACM notification sent status. */
 	uint8_t notification_sent;
-	void (*callback)(void);
 } cdc_acm_data_t;
 
 static cdc_acm_data_t cdc_acm_data = {
@@ -216,6 +212,9 @@ static const uint8_t cdc_acm_usb_description[] = {
     0x0C, USB_STRING_DESC, '0', 0, '0', 0, '.', 0, '0', 0, '1', 0,
 };
 
+volatile bool cdc_acm_tx_busy;
+volatile bool cdc_acm_rx_busy;
+
 /**
  * Handler called for Class requests not handled by the USB stack.
  *
@@ -273,13 +272,8 @@ static int cdc_acm_class_handle_req(usb_setup_packet_t *pSetup, uint32_t *len,
 static void cdc_acm_bulk_in(void *data, int error, qm_usb_ep_idx_t ep,
 			    qm_usb_ep_status_t status)
 {
+	cdc_acm_tx_busy = false;
 	QM_PUTS("CDC ACM IN BULK callback!");
-	cdc_acm_data_t *const dev_data = &cdc_acm_data;
-
-	dev_data->tx_ready = 1;
-	/* Call callback only if TX IRQ enabled. */
-	if (dev_data->callback && dev_data->tx_irq_ena)
-		dev_data->callback();
 }
 
 /**
@@ -294,8 +288,9 @@ static void cdc_acm_bulk_out(void *data, int error, qm_usb_ep_idx_t ep,
 	cdc_acm_data_t *const dev_data = &cdc_acm_data;
 	uint32_t bytes_to_read, i, j, buf_head;
 	uint8_t tmp_buf[4];
-
+	cdc_acm_rx_busy = true;
 	QM_PUTS("CDC ACM OUT BULK callback!");
+
 	/* Check how many bytes were received. */
 	qm_usb_ep_get_bytes_read(QM_USB_0, ep, &bytes_to_read);
 
@@ -325,10 +320,7 @@ static void cdc_acm_bulk_out(void *data, int error, qm_usb_ep_idx_t ep,
 	}
 
 	dev_data->rx_buf_head = buf_head;
-	dev_data->rx_ready = 1;
-	/* Call callback only if RX IRQ enabled. */
-	if (dev_data->callback && dev_data->rx_irq_ena)
-		dev_data->callback();
+	cdc_acm_rx_busy = false;
 }
 
 /**
@@ -405,7 +397,8 @@ static usb_device_config_t cdc_acm_config = {
     .status_callback = cdc_acm_dev_status_cb,
     .interface = {.class_handler = cdc_acm_class_handle_req,
 		  .custom_handler = NULL,
-		  .data = NULL},
+		  .data = NULL,
+		  .data_size = 0},
     .num_endpoints = CDC_ITF1_NUM_EP + CDC_ITF2_NUM_EP,
     .endpoints = cdc_acm_eps};
 
@@ -415,6 +408,7 @@ int cdc_acm_init(void)
 	int ret;
 
 	cdc_acm_config.interface.data = dev_data->interface_data;
+	cdc_acm_config.interface.data_size = sizeof(dev_data->interface_data);
 
 	/* Initialize the USB driver with the right configuration. */
 	ret = usb_enable(&cdc_acm_config);
@@ -430,14 +424,26 @@ int cdc_acm_fifo_fill(const uint8_t *tx_data, int len)
 {
 	cdc_acm_data_t *const dev_data = &cdc_acm_data;
 	uint32_t bytes_written = 0;
+	int tmout = 1000;
+	int ret;
 
+	cdc_acm_tx_busy = true;
 	if (dev_data->usb_status != QM_USB_CONFIGURED) {
 		return 0;
 	}
 
-	dev_data->tx_ready = 0;
-	qm_usb_ep_write(QM_USB_0, QM_USB_IN_EP_4, tx_data, len, &bytes_written);
-
+	ret = qm_usb_ep_write(QM_USB_0, QM_USB_IN_EP_4, tx_data, len,
+			      &bytes_written);
+	if (ret < 0) {
+		return ret;
+	}
+	/* Timeout after 1ms. */
+	while (cdc_acm_tx_busy && --tmout) {
+		clk_sys_udelay(1000);
+	}
+	if (!tmout) {
+		return -EIO;
+	}
 	return bytes_written;
 }
 
@@ -445,6 +451,10 @@ int cdc_acm_fifo_read(uint8_t *rx_data, const int size)
 {
 	uint32_t bytes_read, i;
 	cdc_acm_data_t *const dev_data = &cdc_acm_data;
+
+	/* Wait for current read process to be completed. */
+	while (cdc_acm_rx_busy)
+		;
 
 	int avail_data = (CDC_ACM_BUFFER_SIZE + dev_data->rx_buf_head -
 			  dev_data->rx_buf_tail) %
@@ -464,61 +474,7 @@ int cdc_acm_fifo_read(uint8_t *rx_data, const int size)
 	dev_data->rx_buf_tail =
 	    (dev_data->rx_buf_tail + bytes_read) % CDC_ACM_BUFFER_SIZE;
 
-	if (dev_data->rx_buf_tail == dev_data->rx_buf_head) {
-		/* Buffer empty. */
-		dev_data->rx_ready = 0;
-	}
-
 	return bytes_read;
-}
-
-void cdc_acm_irq_tx_enable(void)
-{
-	cdc_acm_data.tx_irq_ena = 1;
-}
-
-void cdc_acm_irq_tx_disable(void)
-{
-	cdc_acm_data.tx_irq_ena = 0;
-}
-
-int cdc_acm_irq_tx_ready(void)
-{
-	cdc_acm_data_t *const dev_data = &cdc_acm_data;
-
-	if (dev_data->tx_ready) {
-		dev_data->tx_ready = 0;
-		return 1;
-	}
-
-	return 0;
-}
-
-void cdc_acm_irq_rx_enable(void)
-{
-	cdc_acm_data.rx_irq_ena = 1;
-}
-
-void cdc_acm_irq_rx_disable(void)
-{
-	cdc_acm_data.rx_irq_ena = 0;
-}
-
-int cdc_acm_irq_rx_ready(void)
-{
-	cdc_acm_data_t *const dev_data = &cdc_acm_data;
-
-	if (dev_data->rx_ready) {
-		dev_data->rx_ready = 0;
-		return 1;
-	}
-
-	return 0;
-}
-
-void cdc_acm_irq_callback_set(void (*cb)(void))
-{
-	cdc_acm_data.callback = cb;
 }
 
 /**

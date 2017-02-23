@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,24 +39,31 @@
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 /* The following defines the pin and pin mux details for each SoC. */
 #if (QUARK_SE)
 #define PIN_OUT 25
 #define LED_PIN_ID (QM_PIN_ID_59)
+#define PIN_MUX_FN (QM_PIN_59_FN_GPIO_25)
 #elif(QUARK_D2000)
 #define PIN_OUT 24
 #define LED_PIN_ID (QM_PIN_ID_24)
+#define PIN_MUX_FN (QM_PIN_24_FN_GPIO_24)
 #endif
-#define PIN_MUX_FN (QM_PMUX_FN_0)
 #define DELAY 250000UL /* 0.25 seconds. */
+
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(LED_PIN_ID, PIN_MUX_FN);
+}
 
 int main(void)
 {
 	static qm_gpio_port_config_t cfg;
 
 	/* Set the GPIO pin muxing. */
-	qm_pmux_select(LED_PIN_ID, PIN_MUX_FN);
+	pin_mux_setup();
 
 	/* Set the GPIO pin direction to out and write the config. */
 	cfg.direction = BIT(PIN_OUT);

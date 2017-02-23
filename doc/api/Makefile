@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-PDF_NAME= "Quark Microcontroller Software Interface 1.3.1.pdf"
+PDF_NAME= "Quark Microcontroller Software Interface 1.4.0.pdf"
 
 V ?= 0
 

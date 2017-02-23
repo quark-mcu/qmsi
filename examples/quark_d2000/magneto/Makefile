@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,13 @@ LDLIBS += -lm
 
 ifneq ($(SOC),quark_d2000)
 $(error Supported SOC value is 'quark_d2000')
+endif
+
+ENABLE_CALIBRATION ?= yes
+
+ifeq ($(ENABLE_CALIBRATION), yes)
+    CFLAGS += -DENABLE_CALIBRATION
+    $(info Calibration ENABLED!)
 endif
 
 ### Make includes
