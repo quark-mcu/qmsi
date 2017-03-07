@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
  */
 
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
 
@@ -50,7 +51,7 @@ void rtc_example_callback(void *data)
 {
 	/* Set alarm to trigger again ALARM_INTERVAL after. */
 	qm_rtc_set_alarm(QM_RTC_0,
-			 (QM_RTC[QM_RTC_0].rtc_ccvr + ALARM_INTERVAL));
+			 (QM_RTC[QM_RTC_0]->rtc_ccvr + ALARM_INTERVAL));
 
 	++cb_count;
 	cb_fired = true;
@@ -70,7 +71,8 @@ int main(void)
 	cfg.callback_data = NULL;
 	cfg.prescaler = CLK_RTC_DIV_1;
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/* Enable RTC. */
 	clk_periph_enable(CLK_PERIPH_RTC_REGISTER);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 #include "clk.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "usb_cdc_acm.h"
 
@@ -48,48 +49,56 @@
 #define USB_VBUS_GPIO_PORT (QM_GPIO_0)
 #define ONE_SEC_UDELAY (1000000)
 
-static const char *banner1 = "Send characters to the UART device\r\n";
+static const char *banner1 = "Send characters to the UART device.\r\n";
 static const char *banner2 = "Characters read:\r\n";
 
-static volatile bool data_transmitted;
-static volatile bool data_received;
 static char data_buf[64];
 
-static void interrupt_handler()
+static int write_data(const char *buf, int len)
 {
-	if (cdc_acm_irq_tx_ready()) {
-		data_transmitted = true;
-	}
+	int part = 0;
 
-	if (cdc_acm_irq_rx_ready()) {
-		data_received = true;
+	while (part < len) {
+		if (cdc_acm_tx_busy) {
+			QM_PUTS("CDC ACM Busy (Package dropped.)");
+			return -EIO;
+		}
+		int size = cdc_acm_fifo_fill((uint8_t *)buf, len - part);
+		if (size < 0) {
+			QM_PRINTF("CDC ACM Write Error %d.\n", size);
+			return size;
+		}
+
+		part += size;
+		buf += size;
 	}
+	return 0;
 }
 
-static void write_data(const char *buf, int len)
+static int read_data(uint8_t *buf, size_t *len, size_t max_len)
 {
-	cdc_acm_irq_tx_enable();
-
-	data_transmitted = false;
-	cdc_acm_fifo_fill((uint8_t *)buf, len);
-	while (data_transmitted == false)
-		;
-
-	cdc_acm_irq_tx_disable();
+	size_t part = 0;
+	size_t total = 0;
+	do {
+		part = cdc_acm_fifo_read(buf + total, max_len - total);
+		total += part;
+	} while (part && (total < max_len));
+	*len = total;
+	if (part) {
+		return -EIO;
+	}
+	return 0;
 }
 
-static void read_and_echo_data(int *bytes_read)
+static void read_and_echo_data(void)
 {
-	while (data_received == false)
-		;
-
-	data_received = false;
-
 	/* Read all data and echo it back. */
-	while ((*bytes_read =
-		    cdc_acm_fifo_read((uint8_t *)data_buf, sizeof(data_buf)))) {
-		write_data(data_buf, *bytes_read);
+	size_t bytes_read = 0;
+	while (bytes_read == 0) {
+		read_data((uint8_t *)data_buf, &bytes_read, sizeof(data_buf));
 	}
+	write_data(data_buf, bytes_read);
+	QM_PRINTF("Echo done for %d bytes\n", bytes_read);
 }
 
 static void enable_usb_vbus(void)
@@ -102,12 +111,13 @@ static void enable_usb_vbus(void)
 
 int main(void)
 {
-	uint32_t baudrate, dtr = 0;
-	int bytes_read;
+	uint32_t baudrate;
+	uint32_t dtr = 0;
 
 	QM_PUTS("Starting: USB CDC ACM Example");
 
-	qm_irq_request(QM_IRQ_USB_0_INT, qm_usb_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_USB_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_USB_0_INT, qm_usb_0_isr);
 
 	/* Enable the USB VBUS on Quark SE DevBoard. */
 	enable_usb_vbus();
@@ -132,16 +142,12 @@ int main(void)
 	}
 
 	QM_PUTS("USB CDC ACM set. Switch to the USB Serial Console.");
-	cdc_acm_irq_callback_set(interrupt_handler);
 	write_data(banner1, strlen(banner1));
 	write_data(banner2, strlen(banner2));
 
-	/* Enable RX interrupts. */
-	cdc_acm_irq_rx_enable();
-
 	/* Echo the received data. */
 	while (1) {
-		read_and_echo_data(&bytes_read);
+		read_and_echo_data();
 	}
 
 	return 0;

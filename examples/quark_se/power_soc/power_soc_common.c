@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,10 @@
 #include "qm_comparator.h"
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_rtc.h"
 #include "qm_uart.h"
 
@@ -45,6 +47,11 @@ static void power_soc_callback(void *data, uint32_t status)
 {
 	/* Set comparator ready to true. */
 	*(bool *)data = true;
+}
+
+static void power_soc_comp_callback(void *data, uint32_t status)
+{
+	QM_IR_MASK_INT(QM_IRQ_COMPARATOR_0_INT);
 }
 
 void wait_user_ready(void)
@@ -62,7 +69,8 @@ void wait_user_ready(void)
 	cfg.callback = power_soc_callback;
 	cfg.callback_data = (void *)&ready;
 
-	qm_irq_request(QM_IRQ_AON_GPIO_0_INT, qm_aon_gpio_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_AON_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_AON_GPIO_0_INT, qm_aon_gpio_0_isr);
 
 	qm_gpio_set_config(QM_AON_GPIO_0, &cfg);
 
@@ -73,7 +81,7 @@ void wait_user_ready(void)
 void setup_rtc_alarm(void)
 {
 	qm_rtc_config_t rtc_cfg;
-	uint32_t aonc_start;
+	uint32_t rtc_start;
 
 	/* Configure the RTC and request the IRQ. */
 	rtc_cfg.init_val = 0;
@@ -85,7 +93,8 @@ void setup_rtc_alarm(void)
 
 	qm_rtc_set_config(QM_RTC_0, &rtc_cfg);
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 
 	/*
 	 * The RTC clock resides in a different clock domain to the
@@ -94,9 +103,16 @@ void setup_rtc_alarm(void)
 	 * is initiated without waiting for the transaction to complete
 	 * the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_AONC[0].aonc_cnt;
-	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT)
+	rtc_start = QM_RTC[QM_RTC_0]->rtc_ccvr;
+	while (QM_RTC[QM_RTC_0]->rtc_ccvr - rtc_start < RTC_SYNC_CLK_COUNT)
 		;
+}
+
+static void pin_mux_setup(void)
+{
+	/* Set up pin muxing and request IRQ. */
+	qm_pmux_select(QM_PIN_ID_13, QM_PIN_13_FN_AIN_13);
+	qm_pmux_input_en(QM_PIN_ID_13, true);
 }
 
 void setup_aon_comparator(void)
@@ -105,9 +121,7 @@ void setup_aon_comparator(void)
 
 	QM_PUTS("Setting up Comparator.");
 
-	/* Set up pin muxing and request IRQ. */
-	qm_pmux_select(QM_PIN_ID_13, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_13, true);
+	pin_mux_setup();
 
 	/* Clear all comparator pending interrupts. */
 	QM_SCSS_CMP->cmp_pwr = 0;
@@ -118,8 +132,10 @@ void setup_aon_comparator(void)
 	    BIT(WAKEUP_COMPARATOR_PIN); /* Ref internal voltage. */
 	ac_cfg.polarity = 0x0; /* Fire if greater than ref (high level). */
 	ac_cfg.power = BIT(WAKEUP_COMPARATOR_PIN);  /* Normal operation mode. */
-	ac_cfg.int_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
+	ac_cfg.cmp_en = BIT(WAKEUP_COMPARATOR_PIN); /* Enable comparator. */
+	ac_cfg.callback = power_soc_comp_callback;
 	qm_ac_set_config(&ac_cfg);
 
-	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_COMPARATOR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 }

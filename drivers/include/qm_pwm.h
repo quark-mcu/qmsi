@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -163,7 +163,6 @@ int qm_pwm_start(const qm_pwm_t pwm, const qm_pwm_id_t id);
  */
 int qm_pwm_stop(const qm_pwm_t pwm, const qm_pwm_id_t id);
 
-#if (ENABLE_RESTORE_CONTEXT)
 /**
  * Save PWM peripheral's context.
  *
@@ -194,7 +193,6 @@ int qm_pwm_save_context(const qm_pwm_t pwm, qm_pwm_context_t *const ctx);
  */
 int qm_pwm_restore_context(const qm_pwm_t pwm,
 			   const qm_pwm_context_t *const ctx);
-#endif /* ENABLE_RESTORE_CONTEXT */
 
 /**
  * @}

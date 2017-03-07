@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,10 @@
 /* Buffer size for reading CHIPID. */
 #define BUFFER_SIZE (2)
 
+#define BMI160_CHIP_ID_ADDRESS 0x80
+#define BMI160_CHIP_ID 0xD1
+#define BMI160_DUMMY_READ_ADDR 0x7F
+
 volatile bool xfer_active;
 volatile int err_code;
 volatile uint16_t transfer_len;
@@ -62,11 +66,40 @@ static void spi_cb(void *data, int error, qm_ss_spi_status_t spi_status,
 	transfer_len = len;
 }
 
+/* It is recommended to perform a SPI single read access to
+ * BMI160_DUMMY_READ_ADDR in order to force the device into SPI
+ * communication mode.
+ */
+static void bmi_init()
+{
+	tx_buffer[0] = BMI160_DUMMY_READ_ADDR;
+
+	qm_ss_spi_transfer_t trans;
+	trans.rx = rx_buffer;
+	trans.tx = tx_buffer;
+	trans.rx_len = BUFFER_SIZE;
+	trans.tx_len = BUFFER_SIZE;
+
+	/* Set SPI configuration. */
+	qm_ss_spi_set_config(spi, &conf);
+
+	/* Enable clock for SPI 0. */
+	ss_clk_spi_enable(QM_SS_SPI_0);
+
+	/* Select slave. */
+	qm_ss_spi_slave_select(spi, select);
+
+	qm_ss_spi_transfer(spi, &trans, NULL);
+
+	/* Disable clock for SPI 0. */
+	ss_clk_spi_disable(QM_SS_SPI_0);
+}
+
 static void spi_transfer_polled(void)
 {
 	QM_PUTS("Reading CHIPID in polled mode.");
 
-	tx_buffer[0] = 0x80; /* Read chip ID. */
+	tx_buffer[0] = BMI160_CHIP_ID_ADDRESS;
 
 	/* Set up transfer values. */
 	qm_ss_spi_transfer_t trans;
@@ -85,6 +118,7 @@ static void spi_transfer_polled(void)
 
 	/* Select slave and do the actual SPI transfer. */
 	err_code |= qm_ss_spi_slave_select(spi, select);
+
 	err_code |= qm_ss_spi_transfer(spi, &trans, NULL);
 
 	/* Disable clock for SPI 0. */
@@ -92,11 +126,11 @@ static void spi_transfer_polled(void)
 
 	if (err_code != 0) {
 		QM_PUTS("Error: SPI transfer failed.");
-	} else if (rx_buffer[1] == 0xd1) {
-		QM_PUTS("CHIPID = 0x1d");
+	} else if (rx_buffer[1] == BMI160_CHIP_ID) {
+		QM_PRINTF("CHIPID = 0x%x\n", BMI160_CHIP_ID);
 	} else {
-		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0xd1.\n",
-			  rx_buffer[1]);
+		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0x%x.\n",
+			  rx_buffer[1], BMI160_CHIP_ID);
 	}
 }
 
@@ -104,7 +138,7 @@ static void spi_transfer_irq(void)
 {
 	QM_PUTS("Reading CHIPID in IRQ mode.");
 
-	tx_buffer[0] = 0x80; /* Read chip ID. */
+	tx_buffer[0] = BMI160_CHIP_ID_ADDRESS;
 
 	/* Set up transfer values. */
 	qm_ss_spi_async_transfer_t irq_trans;
@@ -116,25 +150,29 @@ static void spi_transfer_irq(void)
 	irq_trans.callback = spi_cb;
 
 	/* Register interrupts. */
+
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_spi_0_int.err_int_mask);
+	QM_IR_UNMASK_INTERRUPTS(
+	    QM_INTERRUPT_ROUTER->ss_spi_0_int.rx_avail_mask);
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_spi_0_int.tx_req_mask);
+
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_ERROR_INT, qm_ss_spi_0_error_isr);
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_RX_AVAIL_INT,
 			  qm_ss_spi_0_rx_avail_isr);
 	qm_ss_irq_request(QM_SS_IRQ_SPI_0_TX_REQ_INT, qm_ss_spi_0_tx_req_isr);
 
-	tx_buffer[0] = 0x80; /* Read chip ID. */
-
 	err_code = 0;
 	xfer_active = true;
 
 	/* Set SPI configuration. */
-	qm_ss_spi_set_config(spi, &conf);
+	err_code = qm_ss_spi_set_config(spi, &conf);
 
 	/* Enable clock for SPI 0. */
 	ss_clk_spi_enable(QM_SS_SPI_0);
 
 	/* Select slave and do the actual SPI transfer. */
-	qm_ss_spi_slave_select(spi, select);
-	qm_ss_spi_irq_transfer(spi, &irq_trans);
+	err_code |= qm_ss_spi_slave_select(spi, select);
+	err_code |= qm_ss_spi_irq_transfer(spi, &irq_trans);
 	while (xfer_active)
 		;
 
@@ -145,11 +183,11 @@ static void spi_transfer_irq(void)
 		QM_PRINTF(
 		    "Error: SPI transfer failed. (%d frames transmitted)\n",
 		    transfer_len);
-	} else if (rx_buffer[1] == 0xd1) {
-		QM_PUTS("CHIPID = 0x1d");
+	} else if (rx_buffer[1] == BMI160_CHIP_ID) {
+		QM_PRINTF("CHIPID = 0x%x\n", BMI160_CHIP_ID);
 	} else {
-		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0xd1.\n",
-			  rx_buffer[1]);
+		QM_PRINTF("Error: CHIPID doesn't match 0x%x != 0x%x.\n",
+			  rx_buffer[1], BMI160_CHIP_ID);
 	}
 }
 
@@ -163,6 +201,7 @@ int main(void)
 	conf.clk_divider = 32; /* 1MHz. */
 	conf.bus_mode = QM_SS_SPI_BMODE_0;
 
+	bmi_init();
 	spi_transfer_polled();
 	spi_transfer_irq();
 

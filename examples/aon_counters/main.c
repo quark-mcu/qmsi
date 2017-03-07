@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@
 
 #include "qm_aon_counters.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 
 #define NUM_CALLBACKS (5)
@@ -48,9 +49,6 @@ static volatile uint32_t callback_count;
 static void aonpt_example_callback()
 {
 	++callback_count;
-
-	/* Clear the timer so it can fire again. */
-	qm_aonpt_clear(QM_AONC_0);
 }
 
 int main(void)
@@ -74,7 +72,9 @@ int main(void)
 	cfg.int_en = true;  /* Interrupts enabled. */
 	cfg.callback = aonpt_example_callback;
 
-	qm_irq_request(QM_IRQ_AONPT_0_INT, qm_aonpt_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_AONPT_0_INT);
+
+	QM_IRQ_REQUEST(QM_IRQ_AONPT_0_INT, qm_aonpt_0_isr);
 
 	qm_aonpt_set_config(QM_AONC_0, &cfg);
 
@@ -85,13 +85,14 @@ int main(void)
 	QM_PRINTF("Periodic Timer callback fired %d times.\n", callback_count);
 
 	/* Get the value of the Always-on Periodic Timer. */
-	if (qm_aonpt_get_value(QM_AONC_0, &c_val) == 0) {
+	if (qm_aonpt_get_value(QM_AONC_0, &pt_val) == 0) {
 		QM_PRINTF("Always-on Periodic Timer value: %u\n", pt_val);
 	} else {
 		QM_PUTS("Error: Could not read Periodic timer value");
 	}
 
 	/* Disable the always-on periodic timer interrupt. */
+	cfg.count = 0x0;
 	cfg.int_en = false;
 	qm_aonpt_set_config(QM_AONC_0, &cfg);
 

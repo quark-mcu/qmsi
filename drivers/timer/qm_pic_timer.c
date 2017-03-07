@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -127,6 +127,20 @@ int qm_pic_timer_restore_context(const qm_pic_timer_context_t *const ctx)
 	PIC_TIMER->timer_icr.reg = ctx->timer_icr;
 	PIC_TIMER->timer_dcr.reg = ctx->timer_dcr;
 	PIC_TIMER->lvttimer.reg = ctx->lvttimer;
+
+	return 0;
+}
+#else
+int qm_pic_timer_save_context(qm_pic_timer_context_t *const ctx)
+{
+	(void)ctx;
+
+	return 0;
+}
+
+int qm_pic_timer_restore_context(const qm_pic_timer_context_t *const ctx)
+{
+	(void)ctx;
 
 	return 0;
 }

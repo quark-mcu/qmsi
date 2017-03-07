@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -231,7 +231,8 @@ static const usb_device_config_t dfu_config = {
     .device_description = dfu_runtime_usb_description,
     .status_callback = dfu_status_cb,
     .interface = {.class_handler = dfu_class_handle_req,
-		  .data = dfu_data.buffer},
+		  .data = dfu_data.buffer,
+		  .data_size = sizeof(dfu_data.buffer)},
     .num_endpoints = DFU_NUM_EP};
 
 int start_dfu(void)

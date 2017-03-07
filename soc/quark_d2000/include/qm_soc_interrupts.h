@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -100,7 +100,7 @@
 #define QM_IRQ_I2C_0_INT_VECTOR 36
 
 #define QM_IRQ_SPI_SLAVE_0_INT 5
-#define QM_IRQ_SPI_SLAVE_0_INT_MASK_OFFSET 3
+#define QM_IRQ_SPI_SLAVE_0_INT_MASK_OFFSET 5
 #define QM_IRQ_SPI_SLAVE_0_INT_VECTOR 37
 
 #define QM_IRQ_UART_1_INT 6

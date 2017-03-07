@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,8 +44,10 @@
 
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_ss_adc.h"
 #include "qm_ss_interrupt.h"
 #include "qm_ss_isr.h"
@@ -87,6 +89,14 @@ static void callback(void *data, int error, qm_ss_adc_status_t status,
 	return;
 }
 
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(QM_PIN_ID_10, QM_PIN_10_FN_AIN_10);
+	qm_pmux_select(QM_PIN_ID_11, QM_PIN_11_FN_AIN_11);
+	qm_pmux_input_en(QM_PIN_ID_10, true);
+	qm_pmux_input_en(QM_PIN_ID_11, true);
+}
+
 int main(void)
 {
 	int i;
@@ -103,10 +113,7 @@ int main(void)
 	ss_clk_adc_set_div(100);
 
 	/* Set up pinmux. */
-	qm_pmux_select(QM_PIN_ID_10, QM_PMUX_FN_1);
-	qm_pmux_select(QM_PIN_ID_11, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_10, true);
-	qm_pmux_input_en(QM_PIN_ID_11, true);
+	pin_mux_setup();
 
 	/* Set the mode and calibrate. */
 	qm_ss_adc_set_mode(QM_SS_ADC_0, QM_SS_ADC_MODE_NORM_CAL);
@@ -143,6 +150,10 @@ int main(void)
 	QM_PUTS("\nADC interrupt mode");
 
 	/* Request the necessary IRQs. */
+
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_adc_0_int_mask);
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_adc_0_error_int_mask);
+
 	qm_ss_irq_request(QM_SS_IRQ_ADC_0_INT, qm_ss_adc_0_isr);
 	qm_ss_irq_request(QM_SS_IRQ_ADC_0_ERROR_INT, qm_ss_adc_0_error_isr);
 

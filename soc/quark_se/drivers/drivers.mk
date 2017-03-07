@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,6 @@ SOC_SOURCES_EXCLUDE = ss_init.c
 endif
 
 DRV_SOURCES =
-DRV_SOURCES += adc/qm_adc.c
 DRV_SOURCES += aon_counters/qm_aon_counters.c
 DRV_SOURCES += comparator/qm_comparator.c
 DRV_SOURCES += dma/qm_dma.c
@@ -59,7 +58,7 @@ DRV_SOURCES += i2c/qm_i2c.c
 DRV_SOURCES += qm_identification.c
 DRV_SOURCES += qm_init.c
 DRV_SOURCES += interrupt/qm_interrupt.c
-DRV_SOURCES += mailbox/qm_mailbox.c
+DRV_SOURCES += mailbox/qm_mailbox_se.c
 DRV_SOURCES += mpr/qm_mpr.c
 ifeq ($(TARGET), sensor)
 DRV_SOURCES += adc/qm_ss_adc.c

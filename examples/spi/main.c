@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -37,8 +37,10 @@
 #include "clk.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 #include "qm_spi.h"
 
 /* The SPI clock divider is calculated in reference to a 32MHz system clock. */
@@ -168,7 +170,8 @@ void spi_irq_mode(void)
 	QM_PUTS("IRQ-based TXRX started");
 
 	/* Register driver IRQ. */
-	qm_irq_request(QM_IRQ_SPI_MASTER_0_INT, qm_spi_master_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_SPI_MASTER_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_SPI_MASTER_0_INT, qm_spi_master_0_isr);
 
 	/* Reset the buffers. */
 	spi_buff_reset();
@@ -212,9 +215,15 @@ void spi_dma_mode(void)
 	compare_tx_rx_buffers = false;
 
 	/* Register the DMA interrupts. */
-	qm_irq_request(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
-	qm_irq_request(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
-	qm_irq_request(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_0);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_0, qm_dma_0_isr_0);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_INT_1);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_INT_1, qm_dma_0_isr_1);
+
+	QM_IR_UNMASK_INT(QM_IRQ_DMA_0_ERROR_INT);
+	QM_IRQ_REQUEST(QM_IRQ_DMA_0_ERROR_INT, qm_dma_0_error_isr);
 
 	/*  Initialise SPI configuration. */
 	cfg.frame_size = QM_SPI_FRAME_SIZE_8_BIT;
@@ -319,31 +328,37 @@ void spi_dma_mode(void)
 	QM_PUTS("DMA-based TXRX done");
 }
 
+static void pin_mux_setup(void)
+{
+/* Mux out SPI tx/rx pins and enable input for rx. */
+#if (QUARK_D2000)
+	qm_pmux_select(QM_PIN_ID_0, QM_PIN_0_FN_SPI0_M_CS_B_0); /* SS0 */
+	qm_pmux_select(QM_PIN_ID_1, QM_PIN_1_FN_SPI0_M_CS_B_1); /* SS1 */
+	qm_pmux_select(QM_PIN_ID_2, QM_PIN_2_FN_SPI0_M_CS_B_2); /* SS2 */
+	qm_pmux_select(QM_PIN_ID_3, QM_PIN_3_FN_SPI0_M_CS_B_3); /* SS3 */
+	qm_pmux_select(QM_PIN_ID_16, QM_PIN_16_FN_SPI0_M_SCK);  /* SCK */
+	qm_pmux_select(QM_PIN_ID_17, QM_PIN_17_FN_SPI0_M_MOSI); /* MOSI */
+	qm_pmux_select(QM_PIN_ID_18, QM_PIN_18_FN_SPI0_M_MISO); /* MISO */
+	qm_pmux_input_en(QM_PIN_ID_18, true);			/* MISO input */
+#elif(QUARK_SE)
+	qm_pmux_select(QM_PIN_ID_58, QM_PIN_58_FN_SPI0_M_CS_B_0); /* SS0 */
+	qm_pmux_select(QM_PIN_ID_59, QM_PIN_59_FN_SPI0_M_CS_B_1); /* SS1 */
+	qm_pmux_select(QM_PIN_ID_60, QM_PIN_60_FN_SPI0_M_CS_B_2); /* SS2 */
+	qm_pmux_select(QM_PIN_ID_61, QM_PIN_61_FN_SPI0_M_CS_B_3); /* SS3 */
+	qm_pmux_select(QM_PIN_ID_55, QM_PIN_55_FN_SPI0_M_SCK);    /* SCK */
+	qm_pmux_select(QM_PIN_ID_57, QM_PIN_57_FN_SPI0_M_MOSI);   /* MOSI */
+	qm_pmux_select(QM_PIN_ID_56, QM_PIN_56_FN_SPI0_M_MISO);   /* MISO */
+	qm_pmux_input_en(QM_PIN_ID_56, true);			  /* MISO input */
+#else
+#error("Unsupported processor.")
+#endif
+}
+
 int main(void)
 {
 	QM_PUTS("Starting: SPI");
 
-/* Mux out SPI tx/rx pins and enable input for rx. */
-#if (QUARK_SE)
-	qm_pmux_select(QM_PIN_ID_55, QM_PMUX_FN_1); /* SPI0_M SCK */
-	qm_pmux_select(QM_PIN_ID_56, QM_PMUX_FN_1); /* SPI0_M MISO */
-	qm_pmux_select(QM_PIN_ID_57, QM_PMUX_FN_1); /* SPI0_M MOSI */
-	qm_pmux_select(QM_PIN_ID_58, QM_PMUX_FN_1); /* SPI0_M SS0 */
-	qm_pmux_select(QM_PIN_ID_59, QM_PMUX_FN_1); /* SPI0_M SS1 */
-	qm_pmux_select(QM_PIN_ID_60, QM_PMUX_FN_1); /* SPI0_M SS2 */
-	qm_pmux_select(QM_PIN_ID_61, QM_PMUX_FN_1); /* SPI0_M SS3 */
-	qm_pmux_input_en(QM_PIN_ID_56, true);
-
-#elif(QUARK_D2000)
-	qm_pmux_select(QM_PIN_ID_0, QM_PMUX_FN_2);  /* SS0 */
-	qm_pmux_select(QM_PIN_ID_1, QM_PMUX_FN_2);  /* SS1 */
-	qm_pmux_select(QM_PIN_ID_2, QM_PMUX_FN_2);  /* SS2 */
-	qm_pmux_select(QM_PIN_ID_3, QM_PMUX_FN_2);  /* SS3 */
-	qm_pmux_select(QM_PIN_ID_16, QM_PMUX_FN_2); /* SCK */
-	qm_pmux_select(QM_PIN_ID_17, QM_PMUX_FN_2); /* TXD */
-	qm_pmux_select(QM_PIN_ID_18, QM_PMUX_FN_2); /* RXD */
-	qm_pmux_input_en(QM_PIN_ID_18, true);       /* RXD input */
-#endif
+	pin_mux_setup();
 
 	spi_polled_mode();
 	spi_irq_mode();
