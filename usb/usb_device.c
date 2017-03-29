@@ -82,6 +82,14 @@
 #define MAX_NUM_REQ_HANDLERS (4)
 #define MAX_STD_REQ_MSG_SIZE (8)
 
+/**
+ * Usb data buffer struct.
+ */
+typedef struct {
+	uint8_t *data;      /**< Pointer to data buffer. */
+	uint16_t data_size; /**< Size off the data buffer. */
+} usb_data_buffer_t;
+
 static int handle_standard_request(usb_setup_packet_t *pSetup, uint32_t *len,
 				   uint8_t **data);
 
@@ -101,7 +109,7 @@ static uint32_t control_xfer_len;       /** total length of control transfer */
 static uint8_t current_config;		/** currently selected configuration */
 
 /** Array of installed request data pointers. */
-static uint8_t *req_data_store[MAX_NUM_REQ_HANDLERS];
+static usb_data_buffer_t req_data_store[MAX_NUM_REQ_HANDLERS];
 
 /** Variable to check whether the usb has been enabled yet. */
 static bool usb_enabled;
@@ -180,9 +188,10 @@ static void handle_setup_packet()
 	} else {
 		/* Defaults for data pointer and residue. */
 		type = REQTYPE_GET_TYPE(setup_packet.request_type);
-		data_buf = req_data_store[type];
-		data_count = setup_packet.length;
-		control_xfer_len = setup_packet.length;
+		data_buf = req_data_store[type].data;
+		data_count =
+		    MIN(setup_packet.length, req_data_store[type].data_size);
+		control_xfer_len = data_count;
 
 		if ((setup_packet.length == 0) ||
 		    (REQTYPE_GET_DIR(setup_packet.request_type) ==
@@ -240,7 +249,7 @@ static void handle_out_control_transfer(void *data, int error,
 		if (data_count == 0) {
 			/*Received all, send data to handler*/
 			type = REQTYPE_GET_TYPE(setup_packet.request_type);
-			data_buf = req_data_store[type];
+			data_buf = req_data_store[type].data;
 			if (!handle_request(&setup_packet, &control_xfer_len,
 					    &data_buf)) {
 				qm_usb_ep_set_stall_state(QM_USB_0,
@@ -623,8 +632,13 @@ int usb_enable(const usb_device_config_t *config)
 
 	dev_config = config;
 
-	req_data_store[REQTYPE_TYPE_STANDARD] = std_request_data;
-	req_data_store[REQTYPE_TYPE_CLASS] = config->interface.data;
+	req_data_store[REQTYPE_TYPE_STANDARD].data_size =
+	    sizeof(std_request_data);
+	req_data_store[REQTYPE_TYPE_STANDARD].data = std_request_data;
+
+	req_data_store[REQTYPE_TYPE_CLASS].data = config->interface.data;
+	req_data_store[REQTYPE_TYPE_CLASS].data_size =
+	    config->interface.data_size;
 
 	ret = qm_usb_set_status_callback(QM_USB_0, config->status_callback);
 	if (ret < 0) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -173,7 +173,6 @@ int qm_gpio_read_port(const qm_gpio_t gpio, uint32_t *const port);
  */
 int qm_gpio_write_port(const qm_gpio_t gpio, const uint32_t val);
 
-#if (ENABLE_RESTORE_CONTEXT)
 /**
  * Save GPIO context.
  *
@@ -204,8 +203,6 @@ int qm_gpio_save_context(const qm_gpio_t gpio, qm_gpio_context_t *const ctx);
  */
 int qm_gpio_restore_context(const qm_gpio_t gpio,
 			    const qm_gpio_context_t *const ctx);
-#endif /* ENABLE_RESTORE_CONTEXT */
-
 /**
  * @}
  */

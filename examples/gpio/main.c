@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,8 +41,10 @@
 #include <inttypes.h>
 #include "qm_gpio.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 /*
  * On the Intel(R) Quark(TM) D2000 development platform PIN_OUT and PIN_INTR
@@ -50,8 +52,8 @@
  * On the Intel(R) Quark(TM) SE development platform, PIN_OUT and PIN_INTR are
  * located on header J15 pin 42 and 40 respectively.
  */
-#define PIN_OUT (0)
-#define PIN_INTR (3)
+#define PIN_OUT (QM_PIN_ID_0)
+#define PIN_INTR (QM_PIN_ID_3)
 
 static volatile bool callback_invoked = false;
 static volatile uint32_t callback_status;
@@ -63,6 +65,17 @@ static void gpio_example_callback(void *data, uint32_t status)
 	callback_status = status;
 }
 
+static void pin_mux_setup(void)
+{
+	qm_pmux_pullup_en(PIN_INTR, true);
+	qm_pmux_select(PIN_INTR, QM_PIN_3_FN_GPIO_3);
+	qm_pmux_input_en(PIN_INTR, true);
+	qm_pmux_select(PIN_OUT, QM_PIN_0_FN_GPIO_0);
+
+	/* Enable pullup on interrupt pin. */
+	qm_pmux_pullup_en(PIN_INTR, true);
+}
+
 int main(void)
 {
 	qm_gpio_port_config_t cfg;
@@ -70,11 +83,7 @@ int main(void)
 
 	QM_PUTS("Starting: GPIO");
 
-	/* Pin muxing. */
-	qm_pmux_pullup_en(PIN_INTR, true);
-	qm_pmux_select(PIN_INTR, QM_PMUX_FN_0);
-	qm_pmux_input_en(PIN_INTR, true);
-	qm_pmux_select(PIN_OUT, QM_PMUX_FN_0);
+	pin_mux_setup();
 
 	/* Request IRQ and write GPIO port config. */
 	cfg.direction = BIT(PIN_OUT);
@@ -86,10 +95,8 @@ int main(void)
 	cfg.callback = gpio_example_callback;
 	cfg.callback_data = NULL;
 
-	qm_irq_request(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
-
-	/* Enable pullup on interrupt pin. */
-	qm_pmux_pullup_en(PIN_INTR, true);
+	QM_IR_UNMASK_INT(QM_IRQ_GPIO_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_GPIO_0_INT, qm_gpio_0_isr);
 
 	qm_gpio_set_config(QM_GPIO_0, &cfg);
 

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -125,7 +125,7 @@ endif
 ITA_NO_ASSERT ?= 0
 BUILD ?= release
 CFLAGS += -ffunction-sections -fdata-sections
-LDFLAGS += -Xlinker --gc-sections
+LDFLAGS += -Xlinker --gc-sections -L $(BASE_DIR)/soc/$(SOC)/linker/
 ifeq ($(BUILD), debug)
 CFLAGS += -O0 -g -DDEBUG
 ifeq ($(ITA_NO_ASSERT), 1)
@@ -200,6 +200,7 @@ HAS_HYB_XTAL := 1
 CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -fmessage-length=0
 CFLAGS += -I$(BASE_DIR)/include
+
 CFLAGS += -fno-asynchronous-unwind-tables
 CFLAGS += -DHAS_RTC_XTAL=$(HAS_RTC_XTAL) -DHAS_HYB_XTAL=$(HAS_HYB_XTAL)
 CFLAGS += -DQM_VER_API_MAJOR=$(QM_VER_API_MAJOR) \
@@ -210,6 +211,22 @@ LDFLAGS += -nostdlib
 STDOUT_UART_INIT ?= enable
 ifeq ($(STDOUT_UART_INIT), disable)
 CFLAGS += -DSTDOUT_UART_INIT_DISABLE
+endif
+
+### Default STDOUT UART is selected in header files of each SoC.
+### This can be changed in user application by defining
+### ENABLE_STDOUT_UART.
+### On Quark SE C1000, the output of UART1 can be sent to FTDI
+### chip or pin headers with ENABLE_UART1_FTDI.
+ifeq ($(ENABLE_STDOUT_UART), UART_0)
+CFLAGS += -DSTDOUT_UART_0
+else ifeq ($(ENABLE_STDOUT_UART), UART_1)
+CFLAGS += -DSTDOUT_UART_1
+ifeq ($(ENABLE_UART1_FTDI),1)
+CFLAGS += -DUART1_FTDI
+endif
+else ifneq ($(ENABLE_STDOUT_UART),)
+$(error Wrong UART defined)
 endif
 
 ifeq ($(TARGET), sensor)

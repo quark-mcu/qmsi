@@ -20,7 +20,7 @@ Toolchain
 Optional build dependencies
 ***************************
 
-* Tinycrypt-0.2.0
+* Tinycrypt-0.2.6
 * doxygen
 * texlive-latex-base
 * texlive-latex-extra

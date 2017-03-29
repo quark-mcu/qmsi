@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,8 +44,10 @@
 #include "qm_common.h"
 #include "qm_comparator.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 static volatile bool callback_invoked = false;
 static volatile uint32_t callback_status;
@@ -68,6 +70,12 @@ static void ac_example_callback(void *data, uint32_t status)
 	callback_status = status;
 }
 
+static void pin_mux_setup(void)
+{
+	qm_pmux_select(QM_PIN_ID_0, QM_PIN_0_FN_AIN_0);
+	qm_pmux_input_en(QM_PIN_ID_0, true);
+}
+
 int main(void)
 {
 	qm_ac_config_t ac_cfg;
@@ -79,16 +87,16 @@ int main(void)
 #endif
 
 	/* Set up pin muxing and request IRQ. */
-	qm_pmux_select(QM_PIN_ID_0, QM_PMUX_FN_1);
-	qm_pmux_input_en(QM_PIN_ID_0, true);
+	pin_mux_setup();
 
 	/* Request IRQ and write comparator config. */
-	qm_irq_request(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_COMPARATOR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_COMPARATOR_0_INT, qm_comparator_0_isr);
 
 	ac_cfg.reference = BIT(0); /* Ref internal voltage. */
 	ac_cfg.polarity = 0x0;     /* Fire if greater than ref (high level). */
 	ac_cfg.power = BIT(0);     /* Normal operation mode. */
-	ac_cfg.int_en = BIT(0);    /* AIN0 enable. */
+	ac_cfg.cmp_en = BIT(0);    /* AIN0 enable. */
 	ac_cfg.callback = ac_example_callback;
 
 	qm_ac_set_config(&ac_cfg);

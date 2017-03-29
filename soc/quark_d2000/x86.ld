@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,15 +33,23 @@ MEMORY
 {
 	flash(r)	: ORIGIN = 0x00180000, LENGTH = 32K
 	data(rw)	: ORIGIN = 0x00200000, LENGTH = 4K
-	/* Place IDT at the bottom of SRAM, 52 gate wide */
-	esram_idt (rw)	: ORIGIN = 0x00280000, LENGTH = 0x1A0
-	esram(rw)	: ORIGIN = 0x002801A0, LENGTH = 8K - 1K - 0x1A0
-	stack(rw)	: ORIGIN = 0x00281C00, LENGTH = 1K
+	esram(rw)	: ORIGIN = 0x00280000, LENGTH = 8K - 1K - 0x1A0
+	stack(rw)	: ORIGIN = 0x00281A60, LENGTH = 1K - 0x20
+	/* Place IDT after the stack, 52 gates * 8 bytes wide. */
+	esram_idt (rw)	: ORIGIN = 0x00281E40, LENGTH = 0x1A0
+	esram_gdt (rw)  : ORIGIN = 0x00281FE0, LENGTH = 0x20
 }
 
 /* IDT definition */
 __idt_start = ORIGIN(esram_idt);
 __idt_end = __idt_start + LENGTH(esram_idt);
+
+/* Stack definition */
+__stack_start = ORIGIN(stack) + LENGTH(stack);
+
+/* GDT definition */
+__gdt_start = ORIGIN(esram_gdt);
+__gdt_end = __gdt_start + LENGTH(esram_gdt);
 
 SECTIONS
 {
@@ -75,7 +83,7 @@ SECTIONS
 	__data_vma = ADDR(.data);
 	__data_size = SIZEOF(.data);
 	__bss_start = ADDR(.bss);
-	__bss_end = __bss_start + SIZEOF(.bss);
+	__bss_size = SIZEOF(.bss);
 
 	/* Heap */
 	__heap = .;

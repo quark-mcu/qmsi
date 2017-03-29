@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,16 +44,17 @@
  * Analog Comparator configuration type.
  *
  * Each bit in the registers controls a single Analog Comparator pin.
+ *
+ * @note There is no way to control comparator interrupts using this
+ * configuration struct: when a comparator is enabled and powered-up, it starts
+ * generating interrupts when proper input conditions are met; however,
+ * comparator interrupts can be masked at interrupt routing level.
  */
 typedef struct {
-	uint32_t int_en;    /**< Interrupt enable. */
+	uint32_t cmp_en;    /**< Comparator enable. */
 	uint32_t reference; /**< Reference voltage, 1b: VREF; 0b: AR_PIN. */
 	uint32_t polarity;  /**< 0b: input>ref; 1b: input<ref */
 	uint32_t power;     /**< 1b: Normal mode; 0b:Power-down/Shutdown mode */
-#if HAS_COMPARATOR_VREF2
-	/**< 0b: VREF_1; 1b: VREF_2; When reference is external */
-	uint32_t ar_pad;
-#endif /* HAS_COMPARATOR_VREF2 */
 
 	/**
 	 * Transfer callback.

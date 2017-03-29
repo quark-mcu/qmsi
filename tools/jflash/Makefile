@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,6 @@
 install:
 	@mkdir -p /usr/local/jflash
 	@cp -r helpers /usr/local/jflash/
-	@install -m 0755 jflash /usr/local/jflash/
-	@ln -sf /usr/local/jflash/jflash /usr/local/bin/jflash
+	@install -m 0755 jflash.py /usr/local/jflash/
+	@ln -sf /usr/local/jflash/jflash.py /usr/local/bin/jflash
 	@echo installed into /usr/local/jflash/

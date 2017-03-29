@@ -36,7 +36,7 @@ External Dependencies
 
 * The ISSM toolchain is required to build the source code. It provides both the
   IAMCU and the ARCMCU toolchains (i586-intel-elfiamcu and arc-elf32, respectively).
-  Currently supported version is "2016-05-12".
+  Currently supported version is "2017-02-07".
 * OpenOCD is required to flash applications and ROM files onto the SoC.
 * GDB is optional, it is used as a supplement to OpenOCD for debugging.
 * `Intel® System Studio for Microcontrollers <https://software.intel.com/en-us/intel-system-studio-microcontrollers>`_ is optional.
@@ -330,6 +330,7 @@ Supported features
 * Real-Time Clock (RTC).
 * Retention Alternating Regulator (RAR).
 * Serial Peripheral Interface (SPI) master.
+* Serial Peripheral Interface (SPI) slave.
 * System on Chip (SoC) Identification.
 * Universal Asynchronous Receiver/Transmitter (UART).
 * Update utilities.
@@ -340,7 +341,6 @@ Supported features
 Unsupported Features
 ====================
 
-* Serial Peripheral Interface (SPI) slave.
 * I2S
 
 .. Hyperlink targets

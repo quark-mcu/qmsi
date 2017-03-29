@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
  */
 
 /*
- * QMSI I2C EEPROM simulation.
+ * Inter-Integrated Circuit (I2C) Slave EEPROM Simulation
  *
  * This example simulates an I2C EEPROM to demonstrate how to use I2C slave API.
  * This application uses Microchip 24FC256-I/P I2C EEPROM's protocol.
@@ -48,8 +48,10 @@
 #include "qm_common.h"
 #include "qm_i2c.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_pinmux.h"
+#include "qm_pin_functions.h"
 
 /* EEPROM parameters. */
 #define EEPROM_PAGE_SIZE (64)
@@ -197,24 +199,32 @@ static void eeprom_fsm_cb(void *cb_data, int rc, qm_i2c_status_t status,
 	}
 }
 
+static void pin_mux_setup(void)
+{
+#if (QUARK_D2000)
+	qm_pmux_select(QM_PIN_ID_6, QM_PIN_6_FN_I2C0_SCL); /* I2C_SCL. */
+	qm_pmux_select(QM_PIN_ID_7, QM_PIN_7_FN_I2C0_SDA); /* I2C_SDA. */
+#elif(QUARK_SE)
+	qm_pmux_select(QM_PIN_ID_20, QM_PIN_20_FN_I2C0_SCL); /* I2C0_SCL. */
+	qm_pmux_select(QM_PIN_ID_21, QM_PIN_21_FN_I2C0_SDA); /* I2C0_SDA. */
+#else
+#error("Unsupported processor.")
+#endif
+}
+
 int main(void)
 {
 	qm_i2c_config_t cfg;
 
 	QM_PUTS("Starting: I2C-slave");
 
-	qm_irq_request(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_I2C_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_I2C_0_INT, qm_i2c_0_irq_isr);
 
 	/* Enable I2C 0. */
 	clk_periph_enable(CLK_PERIPH_CLK | CLK_PERIPH_I2C_M0_REGISTER);
 
-#if (QUARK_D2000)
-	qm_pmux_select(QM_PIN_ID_6, QM_PMUX_FN_2); /* I2C_SCL. */
-	qm_pmux_select(QM_PIN_ID_7, QM_PMUX_FN_2); /* I2C_SDA. */
-#elif(QUARK_SE)
-	qm_pmux_select(QM_PIN_ID_20, QM_PMUX_FN_0); /* I2C0_SCL. */
-	qm_pmux_select(QM_PIN_ID_21, QM_PMUX_FN_0); /* I2C0_SDA. */
-#endif
+	pin_mux_setup();
 
 	/* Configure I2C. */
 	cfg.address_mode = QM_I2C_7_BIT; /* Set 7-bit mode. */
@@ -266,7 +276,7 @@ int main(void)
 	while (nb_i2c_transfers) {
 	}
 
-	qm_irq_mask(QM_IRQ_I2C_0_INT);
+	QM_IR_MASK_INT(QM_IRQ_I2C_0_INT);
 
 	QM_PUTS("Finished: I2C slave");
 

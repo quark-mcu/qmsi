@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,10 +35,6 @@ SOC ?= quark_se
 TARGET ?= x86
 BASE_DIR := ../../..
 APP_DIR := .
-
-ifeq ($(TARGET),sensor)
-$(error Supported TARGET value is 'x86')
-endif
 
 ifeq ($(SOC),quark_d2000)
 $(error Supported SOC value is 'quark_se')
