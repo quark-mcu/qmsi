@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
  */
 
 /*
- * Low Power Sensing Standby (LPSS) State
+ * Configure Low Power Sensing Standby (LPSS) State
  *
  * This application must run in conjonction with its Sensor Subsystem
  * counterpart located in examples/sensor/configure_lpss/.
@@ -55,11 +55,14 @@
 #include "power_states.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 #include "qm_rtc.h"
+#include "ss_init.h"
 
-#define NB_LOOP (4)
+#define NB_LOOP (2)
 #define RTC_SYNC_CLK_COUNT (5)
+#define QM_SCSS_GP_SENSOR_READY BIT(2)
 
 static void configure_rtc_alarm(void)
 {
@@ -83,16 +86,19 @@ static void configure_rtc_alarm(void)
 	 * If an entry to sleep is initiated without waiting for the
 	 * transaction to complete the SOC will not wake from sleep.
 	 */
-	aonc_start = QM_AONC[0].aonc_cnt;
-	while (QM_AONC[0].aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
+	aonc_start = QM_AONC[QM_AONC_0]->aonc_cnt;
+	while (QM_AONC[QM_AONC_0]->aonc_cnt - aonc_start < RTC_SYNC_CLK_COUNT) {
 	}
 
-	qm_irq_request(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_RTC_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_RTC_0_INT, qm_rtc_0_isr);
 }
 
 int main(void)
 {
 	int i;
+
+	sensor_activation();
 
 	QM_PUTS("Starting: Configure LPSS example.");
 
@@ -100,7 +106,22 @@ int main(void)
 		/* Wake up with RTC alarm = 1s. */
 		configure_rtc_alarm();
 
+		/*
+		 * Wait for Sensor Subsystem to be ready to enter LPSS
+		 * and check Sensor Subsystem has transitioned to SS0
+		 * from previous LPSS state.
+		 */
+		while (!(QM_SCSS_GP->gps2 & QM_SCSS_GP_SENSOR_READY)) {
+		}
+
 		QM_PRINTF("#%d: Go to LPSS with x86 core in C2.\n", i);
+
+		/*
+		 * Clear Sensor Subsystem ready. Sensor Subsystem will
+		 * assert flag again if it successfully transitions from
+		 * LPSS state.
+		 */
+		QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_SENSOR_READY;
 
 		/*
 		 * Go to LPSS.
@@ -109,7 +130,7 @@ int main(void)
 		 * In case the C2 state needs to be achieved instead of LPSS,
 		 * CCU_SS_LPS_EN in CCU_LP_CLK_CTL register needs to be cleared.
 		 */
-		power_cpu_c2();
+		qm_power_cpu_c2();
 
 		QM_PRINTF("#%d: Wake up from LPSS.\n", i);
 
@@ -122,6 +143,9 @@ int main(void)
 	 * end of the example.
 	 */
 	QM_SCSS_CCU->ccu_lp_clk_ctl &= ~QM_SCSS_CCU_SS_LPS_EN;
+
+	/* Clear gps2 register */
+	QM_SCSS_GP->gps2 &= ~QM_SCSS_GP_SENSOR_READY;
 
 	QM_PUTS("Finished: Configure LPSS example.");
 

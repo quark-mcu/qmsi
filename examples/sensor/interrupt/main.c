@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,13 +47,14 @@
  *
  * 2. SW driven common interrupt app - interrupt handling is requested with:
  *
- *    qm_irq_request(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
+ *    QM_IRQ_REQUEST(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
  *
  */
 
 #include "clk.h"
 #include "qm_common.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_sensor_regs.h"
 #include "qm_soc_regs.h"
 #include "qm_ss_interrupt.h"
@@ -86,6 +87,7 @@ static void ss_gpio_interrupt_example(void)
 	__builtin_arc_sr(BIT(2), QM_SS_GPIO_0_BASE + QM_SS_GPIO_SWPORTA_DDR);
 
 	/* Register the SS GPIO interrupt. */
+	QM_IR_UNMASK_INTERRUPTS(QM_INTERRUPT_ROUTER->ss_gpio_0_int_mask);
 	qm_ss_irq_request(QM_SS_IRQ_GPIO_0_INT, ss_gpio_interrupt_isr);
 
 	/* Set the bit 3 to rising edge-sensitive. */
@@ -127,7 +129,8 @@ static void ss_sw_triggered_interrupt_example(void)
 	uint32_t i;
 	QM_PUTS("Starting: SW triggered interrupt");
 
-	qm_irq_request(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_I2C_1_INT);
+	QM_IRQ_REQUEST(QM_IRQ_I2C_1_INT, sw_interrupt_isr);
 
 	QM_GPIO[0]->gpio_swporta_ddr |= BIT(LED_BIT);
 	for (i = 0; i < NUM_LOOPS; i++) {

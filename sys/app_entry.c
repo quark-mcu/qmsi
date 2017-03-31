@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,11 +38,12 @@
 #include "qm_common.h"
 #include "qm_uart.h"
 
-extern void main(void);
+extern int main(void);
 #if (QM_SENSOR)
 void sensor_init(void);
 #else
-void __attribute__((section(".text.entry"))) _start(void);
+void __attribute__((section(".text.entry"))) __attribute__((noreturn))
+_start(void);
 #endif
 
 void _start(void)
@@ -51,10 +52,10 @@ void _start(void)
 	extern uint32_t __data_vma[];
 	extern uint32_t __data_lma[];
 	extern uint32_t __data_size[];
-	extern uint32_t __bss_end[];
+	extern uint32_t __bss_size[];
 
 	/* Zero out bss */
-	memset(__bss_start, 0x00, (uint32_t)__bss_end - (uint32_t)__bss_start);
+	memset(__bss_start, 0x00, (size_t)__bss_size);
 
 	/* Copy initialised variables */
 	memcpy(__data_vma, __data_lma, (size_t)__data_size);
@@ -73,4 +74,15 @@ void _start(void)
 #endif /* STDOUT_UART_INIT */
 
 	main();
+
+#if (!QM_SENSOR)
+	/*
+	 * Safeguard in case the application returns: loop forever so that
+	 * control is never returned to the bootloader.
+	 */
+	while (1) {
+		/* Halt CPU to save energy. */
+		__asm__ __volatile__("hlt");
+	}
+#endif /* !QM_SENSOR */
 }

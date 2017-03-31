@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, Intel Corporation
+ *  Copyright (c) 2017, Intel Corporation
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@
 #include "qm_common.h"
 #include "qm_fpr.h"
 #include "qm_interrupt.h"
+#include "qm_interrupt_router.h"
 #include "qm_isr.h"
 
 #define FPR_SIZE (0x400)
@@ -96,9 +97,13 @@ int main(void)
 
 /* Set the violation policy to trigger an interrupt. */
 #if (QUARK_D2000)
-	qm_irq_request(QM_IRQ_FLASH_MPR_0_INT, qm_flash_mpr_0_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_FLASH_MPR_0_INT);
+	QM_IRQ_REQUEST(QM_IRQ_FLASH_MPR_0_INT, qm_flash_mpr_0_isr);
 #elif(QUARK_SE)
-	qm_irq_request(QM_IRQ_FLASH_MPR_1_INT, qm_flash_mpr_1_isr);
+	QM_IR_UNMASK_INT(QM_IRQ_FLASH_MPR_1_INT);
+	QM_IRQ_REQUEST(QM_IRQ_FLASH_MPR_1_INT, qm_flash_mpr_1_isr);
+	/* Avoid infinite resets when running on the sensor. */
+	QM_IR_MASK_LMT_HALTS(QM_INTERRUPT_ROUTER->flash_mpr_1_int_mask);
 #endif /* QUARK_D2000 */
 
 	qm_fpr_set_violation_policy(FPR_VIOL_MODE_INTERRUPT, fpr_flash,
@@ -110,7 +115,8 @@ int main(void)
 	cfg.up_bound = low_bound + 1;
 	cfg.low_bound = low_bound;
 
-	qm_fpr_set_config(fpr_flash, QM_FPR_0, &cfg, QM_MAIN_FLASH_SYSTEM);
+	/* Use FPR_1 as FPR_0 is reserved by the bootloader. */
+	qm_fpr_set_config(fpr_flash, QM_FPR_1, &cfg, QM_MAIN_FLASH_SYSTEM);
 
 	/* Trigger a violation event by attempting to read in the flash. */
 	REG_VAL(address);

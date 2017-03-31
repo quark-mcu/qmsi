@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,6 +122,24 @@ int qm_ss_timer_restore_context(const qm_ss_timer_t timer,
 	__builtin_arc_sr(ctx->timer_control, controller + QM_SS_TIMER_CONTROL);
 	__builtin_arc_sr(ctx->timer_limit, controller + QM_SS_TIMER_LIMIT);
 	__builtin_arc_sr(ctx->timer_count, controller + QM_SS_TIMER_COUNT);
+
+	return 0;
+}
+#else
+int qm_ss_timer_save_context(const qm_ss_timer_t timer,
+			     qm_ss_timer_context_t *const ctx)
+{
+	(void)timer;
+	(void)ctx;
+
+	return 0;
+}
+
+int qm_ss_timer_restore_context(const qm_ss_timer_t timer,
+				const qm_ss_timer_context_t *const ctx)
+{
+	(void)timer;
+	(void)ctx;
 
 	return 0;
 }

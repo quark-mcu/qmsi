@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,8 +30,6 @@
 #include "qm_adc.h"
 #include "clk.h"
 #include <string.h>
-
-#if (QUARK_D2000)
 
 /* FIFO_INTERRUPT_THRESHOLD is used by qm_adc_irq_convert to set the threshold
  * at which the FIFO will trigger an interrupt. */
@@ -455,5 +453,3 @@ int qm_adc_irq_convert(const qm_adc_t adc, qm_adc_xfer_t *xfer)
 
 	return 0;
 }
-
-#endif /* QUARK_D2000 */

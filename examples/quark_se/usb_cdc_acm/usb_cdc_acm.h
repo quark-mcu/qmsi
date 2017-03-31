@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Intel Corporation
+ * Copyright (c) 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -111,6 +111,9 @@
 #define LINE_CTRL_DCD (1 << 3)
 #define LINE_CTRL_DSR (1 << 4)
 
+extern volatile bool cdc_acm_tx_busy;
+extern volatile bool cdc_acm_rx_busy;
+
 /**
  * Initialize CDC-ACM Device.
  *
@@ -143,62 +146,6 @@ int cdc_acm_line_ctrl_set(uint32_t ctrl, uint32_t val);
  * @retval Negative @ref errno for possible error codes.
  */
 int cdc_acm_line_ctrl_get(uint32_t ctrl, uint32_t *const val);
-
-/**
- * Set the callback function pointer for IRQ.
- *
- * @param[in] cb Callback function pointer.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-void cdc_acm_irq_callback_set(void (*callback)(void));
-
-/**
- * Check if Rx IRQ has been raised.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-int cdc_acm_irq_rx_ready(void);
-
-/**
- * Enable RX interrupt.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-void cdc_acm_irq_rx_enable(void);
-
-/**
- * Check if TX IRQ has been raised.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-int cdc_acm_irq_tx_ready(void);
-
-/**
- * Enable TX interrupt.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-void cdc_acm_irq_tx_enable(void);
-
-/**
- * Disable TX interrupt.
- *
- * @return Standard errno return type for QMSI.
- * @retval 0 on success.
- * @retval Negative @ref errno for possible error codes.
- */
-void cdc_acm_irq_tx_disable(void);
 
 /**
  * Fill FIFO with data.

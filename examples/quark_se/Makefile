@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016, Intel Corporation
+# Copyright (c) 2017, Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,13 +31,18 @@
 
 SUBDIRS := $(filter %/, $(wildcard ./*/))
 
-### Exclude the app that kicks the ARC off
+### Exclude any apps that are only meant for x86
 ifeq ($(TARGET), sensor)
 SUBDIRS := $(subst ./start_arc/,,${SUBDIRS})
+SUBDIRS := $(subst ./configure_lpss/,,${SUBDIRS})
+SUBDIRS := $(subst ./power_core/,,${SUBDIRS})
+SUBDIRS := $(subst ./power_lpss/,,${SUBDIRS})
+SUBDIRS := $(subst ./usb_cdc_acm/,,${SUBDIRS})
+SUBDIRS := $(subst ./usb_dfu/,,${SUBDIRS})
 endif
 
-ifeq ($(TARGET),sensor)
-$(error Supported TARGET values are 'x86')
+ifeq ($(ENABLE_RESTORE_CONTEXT), 0)
+SUBDIRS := $(subst ./sleep_multicore/,,${SUBDIRS})
 endif
 
 ifneq ($(SOC),quark_se)
