@@ -137,6 +137,11 @@ To build in release mode:
 
 ``make BUILD=release``
 
+To changes the build output directory use
+
+``make O=output/dir``
+
+
 Targets
 =======
 
